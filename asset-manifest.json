@@ -1,22 +1,22 @@
 {
   "files": {
-    "main.css": "/splooshkaboom/static/css/main.27fd15f6.chunk.css",
-    "main.js": "/splooshkaboom/static/js/main.b8a65de2.chunk.js",
-    "main.js.map": "/splooshkaboom/static/js/main.b8a65de2.chunk.js.map",
-    "runtime-main.js": "/splooshkaboom/static/js/runtime-main.07e85008.js",
-    "runtime-main.js.map": "/splooshkaboom/static/js/runtime-main.07e85008.js.map",
-    "static/js/2.2b968baa.chunk.js": "/splooshkaboom/static/js/2.2b968baa.chunk.js",
-    "static/js/2.2b968baa.chunk.js.map": "/splooshkaboom/static/js/2.2b968baa.chunk.js.map",
-    "index.html": "/splooshkaboom/index.html",
-    "precache-manifest.efe84e4e9d939ab01e2f8c2b7d1e4685.js": "/splooshkaboom/precache-manifest.efe84e4e9d939ab01e2f8c2b7d1e4685.js",
-    "service-worker.js": "/splooshkaboom/service-worker.js",
-    "static/css/main.27fd15f6.chunk.css.map": "/splooshkaboom/static/css/main.27fd15f6.chunk.css.map",
-    "static/js/2.2b968baa.chunk.js.LICENSE.txt": "/splooshkaboom/static/js/2.2b968baa.chunk.js.LICENSE.txt"
+    "main.css": "/web-sploosh-kaboom/static/css/main.27fd15f6.chunk.css",
+    "main.js": "/web-sploosh-kaboom/static/js/main.fbaf8662.chunk.js",
+    "main.js.map": "/web-sploosh-kaboom/static/js/main.fbaf8662.chunk.js.map",
+    "runtime-main.js": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js",
+    "runtime-main.js.map": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js.map",
+    "static/js/2.2b968baa.chunk.js": "/web-sploosh-kaboom/static/js/2.2b968baa.chunk.js",
+    "static/js/2.2b968baa.chunk.js.map": "/web-sploosh-kaboom/static/js/2.2b968baa.chunk.js.map",
+    "index.html": "/web-sploosh-kaboom/index.html",
+    "precache-manifest.9a63267a45c7631526130884c79f007c.js": "/web-sploosh-kaboom/precache-manifest.9a63267a45c7631526130884c79f007c.js",
+    "service-worker.js": "/web-sploosh-kaboom/service-worker.js",
+    "static/css/main.27fd15f6.chunk.css.map": "/web-sploosh-kaboom/static/css/main.27fd15f6.chunk.css.map",
+    "static/js/2.2b968baa.chunk.js.LICENSE.txt": "/web-sploosh-kaboom/static/js/2.2b968baa.chunk.js.LICENSE.txt"
   },
   "entrypoints": [
-    "static/js/runtime-main.07e85008.js",
+    "static/js/runtime-main.f6a4d017.js",
     "static/js/2.2b968baa.chunk.js",
     "static/css/main.27fd15f6.chunk.css",
-    "static/js/main.b8a65de2.chunk.js"
+    "static/js/main.fbaf8662.chunk.js"
   ]
 }
