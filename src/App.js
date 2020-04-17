@@ -56,7 +56,7 @@ class Map extends React.Component {
                 probs[[x, y]] = 0.0;
             }
         }
-        return {grid, squidsGotten: 'unknown', probs, best: [3, 3], valid: true};
+        return {grid, squidsGotten: 'unknown', probs, best: [3, 3], valid: true, observationProb: 1.0};
     }
 
     doComputation(grid, squidsGotten) {
@@ -86,7 +86,7 @@ class Map extends React.Component {
             }),
             success: (result) => {
                 if (!result.is_possible) {
-                    this.setState({valid: false});
+                    this.setState({valid: false, observationProb: 0});
                     return;
                 }
                 const t1 = performance.now();
@@ -102,7 +102,7 @@ class Map extends React.Component {
                     }
                     y++;
                 }
-                this.setState({probs, best: result.highest_prob, valid: true});
+                this.setState({probs, best: result.highest_prob, valid: true, observationProb: result.observation_prob});
             },
         });
     }
@@ -176,6 +176,10 @@ class Map extends React.Component {
                     <option value="1">1</option>
                     <option value="2">2</option>
                 </select>
+                <br/>
+                <span style={{color: 'white', fontSize: '80%'}}>
+                    Probability of this pattern yielding these results: {(100 * this.state.observationProb).toFixed(2) + '%'}
+                </span>
             </div>
             <br/>
             <button style={{fontSize: '150%'}} onClick={() => { this.clearField(); }}>Reset</button>
