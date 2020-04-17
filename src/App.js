@@ -1,6 +1,7 @@
 import React from 'react';
 import $ from 'jquery';
 import './App.css';
+import init, { calculate_probabilities } from "./wasm/sploosh_wasm.js";
 const interpolate = require('color-interpolate');
 
 //const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
@@ -40,6 +41,8 @@ class Tile extends React.Component {
     }
 }
 
+let wasm = init(process.env.PUBLIC_URL + "/sploosh_wasm_bg.wasm");
+
 class Map extends React.Component {
     constructor() {
         super();
@@ -56,10 +59,10 @@ class Map extends React.Component {
                 probs[[x, y]] = 0.0;
             }
         }
-        return {grid, squidsGotten: 'unknown', probs, best: [3, 3], valid: true, observationProb: 1.0};
+        return { grid, squidsGotten: 'unknown', probs, best: [3, 3], valid: true, observationProb: 1.0 };
     }
 
-    doComputation(grid, squidsGotten) {
+    async doComputation(grid, squidsGotten) {
         const t0 = performance.now();
         const hits = [];
         const misses = [];
@@ -67,48 +70,43 @@ class Map extends React.Component {
             for (let x = 0; x < 8; x++) {
                 const gridValue = grid[[x, y]];
                 if (gridValue === 'HIT')
-                    hits.push([x, y]);
+                    hits.push(8 * y + x);
                 if (gridValue === 'MISS')
-                    misses.push([x, y]);
+                    misses.push(8 * y + x);
             }
         }
         let squids_gotten = -1;
         for (const n of ['0', '1', '2'])
             if (squidsGotten === n)
                 squids_gotten = Number(n);
-        $.ajax({
-            url: 'http://ec2-34-223-48-61.us-west-2.compute.amazonaws.com:1234/sk',
-            type: 'POST',
-            data: JSON.stringify({
-                hits,
-                misses,
-                squids_gotten,
-            }),
-            success: (result) => {
-                if (!result.is_possible) {
-                    this.setState({valid: false, observationProb: 0});
-                    return;
-                }
-                const t1 = performance.now();
-                console.log('Latency: ' + (t1 - t0) + 'ms');
-                const probs = {...this.state.probs};
-                let y = 0;
-                let x = 0;
-                for (const row of result.probabilities) {
-                    x = 0;
-                    for (const entry of row) {
-                        probs[[x, y]] = entry;
-                        x++;
+
+        await wasm;
+        const probabilities = calculate_probabilities(Uint8Array.from(hits), Uint8Array.from(misses), squids_gotten);
+        console.debug(probabilities);
+
+        if (probabilities !== undefined) {
+            let maxY = 0;
+            let maxX = 0;
+            let highestProb = -1;
+            let probs = [];
+
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    probs[[x, y]] = probabilities[8 * y + x];
+                    if (grid[[x, y]] === null && probabilities[8 * y + x] > highestProb) {
+                        highestProb = probabilities[8 * y + x];
+                        maxX = x;
+                        maxY = y;
                     }
-                    y++;
                 }
-                this.setState({probs, best: result.highest_prob, valid: true, observationProb: result.observation_prob});
-            },
-        });
+            }
+            const observationProb = 1 - probabilities[64];
+            this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid: true, observationProb });
+        }
     }
 
     onClick(x, y) {
-        const grid = {...this.state.grid};
+        const grid = { ...this.state.grid };
         let gridValue = grid[[x, y]];
         switch (gridValue) {
             case null:
@@ -122,7 +120,7 @@ class Map extends React.Component {
                 break;
         }
         grid[[x, y]] = gridValue;
-        this.setState({grid});
+        this.setState({ grid });
         this.doComputation(grid, this.state.squidsGotten);
     }
 
@@ -147,7 +145,7 @@ class Map extends React.Component {
         return <div style={{
             margin: '20px',
         }}>
-            <span style={{fontSize: '150%', color: 'white'}}>Shots used: {usedShots}</span><br/>
+            <span style={{ fontSize: '150%', color: 'white' }}>Shots used: {usedShots}</span><br />
             {naturalsUpTo(8).map(
                 (y) => <div key={y} style={{
                     display: 'flex',
@@ -165,15 +163,15 @@ class Map extends React.Component {
                     )}
                 </div>
             )}
-            {this.state.valid || <div style={{fontSize: '150%', color: 'white'}}>Invalid configuration! This is not possible.</div>}
-            <br/>
-            <div style={{fontSize: '150%'}}>
-                <span style={{color: 'white'}}>Number of squids killed:</span>
+            {this.state.valid || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
+            <br />
+            <div style={{ fontSize: '150%' }}>
+                <span style={{ color: 'white' }}>Number of squids killed:</span>
                 <select
-                    style={{marginLeft: '20px', fontSize: '100%'}}
+                    style={{ marginLeft: '20px', fontSize: '100%' }}
                     value={this.state.squidsGotten}
                     onChange={(event) => {
-                        this.setState({squidsGotten: event.target.value});
+                        this.setState({ squidsGotten: event.target.value });
                         this.doComputation(this.state.grid, event.target.value);
                     }}
                 >
@@ -182,18 +180,18 @@ class Map extends React.Component {
                     <option value="1">1</option>
                     <option value="2">2</option>
                 </select>
-                <br/>
+                <br />
                 {/*
                 <span style={{color: 'white', fontSize: '80%'}}>
                     Probability of this pattern yielding these results: {(100 * this.state.observationProb).toFixed(2) + '%'}
                 </span>
                 */}
             </div>
-            <br/>
-            <button style={{fontSize: '150%'}} onClick={() => { this.clearField(); }}>Reset</button><br/>
+            <br />
+            <button style={{ fontSize: '150%' }} onClick={() => { this.clearField(); }}>Reset</button><br />
             {openingOptimizer && <>
-                <div style={{color: 'white', fontSize: '120%', marginTop: '20px'}}>
-                    Opening optimizer: Probability that this<br/>pattern would get at least one hit: {
+                <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
+                    Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
                     }
                 </div>
@@ -211,10 +209,10 @@ class App extends React.Component {
         return <div style={{
             textAlign: 'center',
         }}>
-            <div style={{display: 'inline-block'}}>
-                <div style={{display: 'inline-block', width: '600px'}}>
-                    <h1 style={{color: 'white'}}>Sploosh Kaboom Probability Calculator</h1>
-                    <p style={{color: 'white'}}>
+            <div style={{ display: 'inline-block' }}>
+                <div style={{ display: 'inline-block', width: '600px' }}>
+                    <h1 style={{ color: 'white' }}>Sploosh Kaboom Probability Calculator</h1>
+                    <p style={{ color: 'white' }}>
                         This page gives exact probabilities (no approximation) of hitting a squid in each cell, given the observation of hits, misses, and completed squid kills.
                         Click on the map to cycle a cell between HIT and MISS.
                         You can also set the number of squids completely killed in the drop-down menu at the bottom.
@@ -225,7 +223,7 @@ class App extends React.Component {
                     </p>
                 </div>
                 <Map />
-                <span style={{color: 'white'}}>Made by Peter Schmidt-Nielsen</span>
+                <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen</span>
             </div>
         </div>;
     }
