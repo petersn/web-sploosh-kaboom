@@ -134,10 +134,16 @@ class Map extends React.Component {
 
     render() {
         let usedShots = 0;
-        for (let y = 0; y < 8; y++)
-            for (let x = 0; x < 8; x++)
-                if (this.state.grid[[x, y]] !== null)
+        let openingOptimizer = true;
+        for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+                if (this.state.grid[[x, y]] !== null) {
                     usedShots++;
+                    if (this.state.grid[[x, y]] === 'HIT')
+                        openingOptimizer = false;
+                }
+            }
+        }
         return <div style={{
             margin: '20px',
         }}>
@@ -177,12 +183,21 @@ class Map extends React.Component {
                     <option value="2">2</option>
                 </select>
                 <br/>
+                {/*
                 <span style={{color: 'white', fontSize: '80%'}}>
                     Probability of this pattern yielding these results: {(100 * this.state.observationProb).toFixed(2) + '%'}
                 </span>
+                */}
             </div>
             <br/>
-            <button style={{fontSize: '150%'}} onClick={() => { this.clearField(); }}>Reset</button>
+            <button style={{fontSize: '150%'}} onClick={() => { this.clearField(); }}>Reset</button><br/>
+            {openingOptimizer && <>
+                <div style={{color: 'white', fontSize: '120%', marginTop: '20px'}}>
+                    Opening optimizer: Probability that this<br/>pattern would get at least one hit: {
+                        this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
+                    }
+                </div>
+            </>}
         </div>;
     }
 }
