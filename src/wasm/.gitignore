@@ -1,0 +1,3 @@
+*.wasm
+package.json
+*.ts
