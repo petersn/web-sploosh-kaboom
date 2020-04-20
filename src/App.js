@@ -553,7 +553,7 @@ class MainMap extends React.Component {
         }
         let squids_gotten = -1;
         for (const n of ['0', '1', '2'])
-            if (squidsGotten === n)
+            if (squidsGotten === n || squidsGotten === Number(n))
                 squids_gotten = Number(n);
 
         await wasm;
@@ -770,7 +770,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.1)</span>
         </div>;
     }
 }
