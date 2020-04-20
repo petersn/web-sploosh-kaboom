@@ -5,7 +5,10 @@ const interpolate = require('color-interpolate');
 //const opencv = require('opencv.js');
 
 //const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
-const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
+//const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
+// .        . . . .
+// 0123456789abcdef
+const colormap = interpolate(['#004', '#070', '#090', '#0b0', '#0d0', '#0f0', '#6f6']);
 const naturalsUpTo = (n) => [...Array(n).keys()];
 
 class Tile extends React.Component {
@@ -30,13 +33,14 @@ class Tile extends React.Component {
                 WebkitUserSelect: 'none',
                 msUserSelect: 'none',
                 color: 'white',
+                opacity: this.props.opacity,
                 backgroundColor: this.props.text === null ? colormap(this.props.prob) : (
                     this.props.text === 'HIT' ? '#a2a' : '#44a'
                 ),
             }}
             onClick={this.props.onClick}
         >
-            {this.props.text === null ? (this.props.prob * 100).toFixed(2) + '%' : this.props.text}
+            {this.props.text === null ? (this.props.prob * 100).toFixed(this.props.precision) + '%' : this.props.text}
         </div>;
     }
 }
@@ -606,7 +610,7 @@ class MainMap extends React.Component {
         this.doComputation(newState.grid, newState.squidsGotten);
     }
 
-    renderActualMap() {
+    renderActualMap(overlayMode) {
         return <div style={{display: 'inline-block'}}>
             {naturalsUpTo(8).map(
                 (y) => <div key={y} style={{
@@ -621,6 +625,8 @@ class MainMap extends React.Component {
                             prob={this.state.probs[[x, y]]}
                             valid={this.state.valid}
                             best={this.state.best}
+                            precision={overlayMode ? 0 : 2}
+                            opacity={overlayMode ? 0.5 + 0.3 * this.state.probs[[x, y]] : undefined}
                         />
                     )}
                 </div>
@@ -638,9 +644,9 @@ class MainMap extends React.Component {
             transform: 'scale(1.01, 1.05)',
             zIndex: 20,
             display: 'inline-block',
-            opacity: 0.4,
+            /* opacity: 0.4, */
         }}>
-            {this.renderActualMap()}
+            {this.renderActualMap(true)}
         </div>;
     }
 
@@ -660,7 +666,7 @@ class MainMap extends React.Component {
             margin: '20px',
         }}>
             <span style={{ fontSize: '150%', color: 'white' }}>Shots used: {usedShots}</span><br />
-            {this.state.doVideoProcessing || this.renderActualMap()}
+            {this.state.doVideoProcessing || this.renderActualMap(false)}
             {this.state.valid || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
