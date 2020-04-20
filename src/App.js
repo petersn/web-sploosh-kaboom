@@ -92,7 +92,7 @@ class MainMap extends React.Component {
             this.getBoardRegistrationAndScale();
         };
         globalMap = this;
-        this.previouslyReadStates = [null, null];
+        this.previouslyReadStates = [null, null, null];
     }
 
     componentDidMount() {
@@ -503,10 +503,11 @@ class MainMap extends React.Component {
             return allEqual
         }
 
-        // If our read state is the same for three frames (for debouncing purposes) then process.
+        // Only recompute if we see states of the form: ABBB (that is, three in a row for debouncing, plus a change).
         if (
-            compareStatesEqual(this.previouslyReadStates[0], this.previouslyReadStates[1]) &&
-            compareStatesEqual(this.previouslyReadStates[1], resultantState)
+            (!compareStatesEqual(this.previouslyReadStates[0], this.previouslyReadStates[1])) &&
+            compareStatesEqual(this.previouslyReadStates[1], this.previouslyReadStates[2]) &&
+            compareStatesEqual(this.previouslyReadStates[2], resultantState)
         ) {
             this.setState(resultantState);
             await this.doComputation(resultantState.grid, resultantState.squidsGotten);
@@ -605,6 +606,44 @@ class MainMap extends React.Component {
         this.doComputation(newState.grid, newState.squidsGotten);
     }
 
+    renderActualMap() {
+        return <div style={{display: 'inline-block'}}>
+            {naturalsUpTo(8).map(
+                (y) => <div key={y} style={{
+                    display: 'flex',
+                }}>
+                    {naturalsUpTo(8).map(
+                        (x) => <Tile
+                            key={x + ',' + y}
+                            x={x} y={y}
+                            onClick={() => this.onClick(x, y)}
+                            text={this.state.grid[[x, y]]}
+                            prob={this.state.probs[[x, y]]}
+                            valid={this.state.valid}
+                            best={this.state.best}
+                        />
+                    )}
+                </div>
+            )}      
+        </div>;
+    }
+
+    renderOverlayMap() {
+        if (!this.state.doVideoProcessing)
+            return;
+        return <div style={{
+            position: 'absolute',
+            top: '210px',
+            left: '127px',
+            transform: 'scale(1.01, 1.05)',
+            zIndex: 20,
+            display: 'inline-block',
+            opacity: 0.4,
+        }}>
+            {this.renderActualMap()}
+        </div>;
+    }
+
     render() {
         let usedShots = 0;
         let openingOptimizer = true;
@@ -621,25 +660,7 @@ class MainMap extends React.Component {
             margin: '20px',
         }}>
             <span style={{ fontSize: '150%', color: 'white' }}>Shots used: {usedShots}</span><br />
-            <div style={{display: 'inline-block'}}>
-                {naturalsUpTo(8).map(
-                    (y) => <div key={y} style={{
-                        display: 'flex',
-                    }}>
-                        {naturalsUpTo(8).map(
-                            (x) => <Tile
-                                key={x + ',' + y}
-                                x={x} y={y}
-                                onClick={() => this.onClick(x, y)}
-                                text={this.state.grid[[x, y]]}
-                                prob={this.state.probs[[x, y]]}
-                                valid={this.state.valid}
-                                best={this.state.best}
-                            />
-                        )}
-                    </div>
-                )}
-            </div>
+            {this.state.doVideoProcessing || this.renderActualMap()}
             {this.state.valid || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
@@ -666,7 +687,7 @@ class MainMap extends React.Component {
             </div>
             <br />
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button><br />
-            {openingOptimizer && <>
+            {openingOptimizer && (!this.state.screenRecordingActive) && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
@@ -690,7 +711,18 @@ class MainMap extends React.Component {
             <video style={{display: 'none'}} ref={this.videoRef}>Video stream not available.</video>
             <canvas style={{display: 'none'}} ref={this.canvasRef} id="cv_canvasRef"></canvas>
             {/* <canvas ref={this.referenceCanvasRef} id="cv_referenceCanvasRef"></canvas> */}
-            <canvas style={{width: '95%', border: this.state.doVideoProcessing ? '5px solid red' : '5px solid blue'}} ref={this.outputCanvasRef} id="cv_outputCanvasRef"></canvas>
+            <div style={{display: 'inline-block'}}>
+                <div style={{
+                    display: 'inline-block',
+                    position: 'relative',
+                }}>
+                    <canvas style={{
+                        border: this.state.doVideoProcessing ? '5px solid red' : '5px solid blue',
+                        width: '1000px',
+                    }} ref={this.outputCanvasRef} id="cv_outputCanvasRef"></canvas>
+                    {this.renderOverlayMap()}
+                </div>
+            </div>
             <br/>
             <span style={{ color: 'white' }}>Last CV time: {this.state.lastCVTime}ms - Last recompute time: {this.state.lastComputationTime}ms</span>
             <div style={{display: 'none'}} ref={this.hiddenAreaRef}></div>
