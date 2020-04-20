@@ -43,6 +43,10 @@ class Tile extends React.Component {
 
 let wasm = init(process.env.PUBLIC_URL + "/sploosh_wasm_bg.wasm");
 
+window.ADJUST = 1.20;
+window.ADJUST_X = 0;
+window.ADJUST_Y = 5;
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -55,6 +59,10 @@ class MainMap extends React.Component {
         this.state = this.makeEmptyState();
         this.bannerCache = new Map();
         this.doComputation(this.state.grid, this.state.squidsGotten);
+        window.RECOMP = () => {
+            this.bannerCache = new Map();
+            this.getBoardRegistrationAndScale();
+        };
     }
 
     componentDidMount() {
@@ -65,7 +73,8 @@ class MainMap extends React.Component {
     makeReferenceImageCanvases() {
         const hiddenArea = this.hiddenAreaRef.current;
         this.referenceCanvases = {};
-        for (const name of ['hit', 'miss', 'killed_squid', 'remaining_squid', 'top_banner']) {
+        // 'top_banner', 'record_banner',
+        for (const name of ['hit', 'miss', 'killed_squid', 'remaining_squid', 'top_banner_new', 'bottom_banner_new']) {
             //
             /*
             var c = document.getElementById("myCanvas");
@@ -139,12 +148,12 @@ class MainMap extends React.Component {
         console.log('' + scores);
         */
         let bestGuessScale = 0.5; //0.5;
-        let searchMargin = 0.5;
-        for (let i = 0; i < 7; i++) {
+        let searchMargin = 0.7;
+        for (let i = 0; i < 10; i++) {
             this.boardFitParams = await this.performGridSearch(
                 bestGuessScale * (1 - searchMargin),
                 bestGuessScale * (1 + 2 * searchMargin),
-                10,
+                i == 0 ? 20 : (i == 1 ? 6 : 4),
             );
             bestGuessScale = this.boardFitParams.scale;
             searchMargin /= 2;
@@ -154,10 +163,18 @@ class MainMap extends React.Component {
         this.bannerCache.delete(bestGuessScale);
         this.testForTopBannerAtScale(bestGuessScale);
         await new Promise(resolve => setTimeout(resolve, 100));
-        setInterval(
+        /*
+        setTimeout(
             () => this.readBoardState(),
             250,
         )
+        //*/
+        /*
+        setInterval(
+            () => this.readBoardState(),
+            50,
+        )
+        //*/
         //this.readBoardState();
         /*
         const bestCoarseScale = await this.performGridSearch(0.1, 1, 10);
@@ -186,13 +203,22 @@ class MainMap extends React.Component {
         if (this.bannerCache.has(scale)) {
             return this.bannerCache.get(scale);
         }
+        const ADJUST = window.ADJUST;
         // OpenCV code.
         const src = window.cv.imread('cv_canvasRef');
         //const templ = window.cv.imread('cv_referenceCanvasRef');
-        const base_templ = window.cv.imread('canvas_top_banner'); //this.referenceCanvases['miss'];
+
+        //const base_templ = window.cv.imread('canvas_top_banner'); //this.referenceCanvases['miss'];
+        //const ADJUST = 1;
+
+        const base_templ = window.cv.imread('canvas_record_banner'); //this.referenceCanvases['miss'];
+        //const ADJUST = 1.22;
+
         // TODO: Don't hardcode these sizes.
-        const scaled_banner_width = Math.round(494 * scale);
-        const scaled_banner_height = Math.round(129 * scale);
+        //const scaled_banner_width = Math.round(494 * scale);
+        //const scaled_banner_height = Math.round(129 * scale);
+        const scaled_banner_width = Math.round(406 * scale * ADJUST);
+        const scaled_banner_height = Math.round(110 * scale * ADJUST);
         let templ = new window.cv.Mat();
         let dsize = new window.cv.Size(scaled_banner_width, scaled_banner_height);
         // You can try more different parameters
@@ -201,7 +227,7 @@ class MainMap extends React.Component {
         const dst = new window.cv.Mat();
         const mask = new window.cv.Mat();
         //const matchMode = window.cv.TM_CCOEFF_NORMED;
-        const matchMode = window.cv.TM_CCOEFF;
+        const matchMode = window.cv.TM_CCOEFF_NORMED;
         window.cv.matchTemplate(src, templ, dst, matchMode, mask);
         let result = window.cv.minMaxLoc(dst, mask);
         let maxPoint = result.maxLoc;
@@ -211,16 +237,20 @@ class MainMap extends React.Component {
         // Draw each of the little squares.
         for (let y = 0; y < 8; y++) {
             for (let x = 0; x < 8; x++) {
-                let centerX = Math.round(maxPoint.x + scale * (105 + x * 52.5));
-                let centerY = Math.round(maxPoint.y + scale * (155 + y * 52.5));
+                let centerX = Math.round(maxPoint.x + scale * (105.25 + x * 52.2) + window.ADJUST_X);
+                let centerY = Math.round(maxPoint.y + scale * (155.75 + y * 52.2) + window.ADJUST_Y);
+                /*
                 let tl = new window.cv.Point(centerX - 9, centerY - 9);
                 let br = new window.cv.Point(centerX + 9, centerY + 9);
+                */
+                let tl = new window.cv.Point(centerX - 7, centerY - 7);
+                let br = new window.cv.Point(centerX + 7, centerY + 7);
                 window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
             }
         }
         for (let squidIndex = 0; squidIndex < 3; squidIndex++) {
-            let centerX = Math.round(maxPoint.x + scale * 648);
-            let centerY = Math.round(maxPoint.y + scale * (122 + squidIndex * 89));
+            let centerX = Math.round(maxPoint.x + scale * 648 + window.ADJUST_X);
+            let centerY = Math.round(maxPoint.y + scale * (122 + squidIndex * 89) + window.ADJUST_Y);
             let tl = new window.cv.Point(centerX - 15, centerY - 15);
             let br = new window.cv.Point(centerX + 15, centerY + 15);
             window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
@@ -231,8 +261,9 @@ class MainMap extends React.Component {
         // Because the value that OpenCV returns is (I think) the raw convolution result from the matched filter
         // the scores basically scale with the image size. Therefore, to normalize we scale inversely by scale^2.
         // The 1e-6 is just to make the numbers be a bit closer to 1.
-        let score = result.maxVal * 1e-6; // / (scale * scale);
-        score /= scale * scale;
+        //let score = result.maxVal * 1e-6; // / (scale * scale);
+        //score /= scale * scale;
+        let score = result.maxVal;
         this.bannerCache.set(scale, score);
         return {
             score, scale,
@@ -248,7 +279,10 @@ class MainMap extends React.Component {
         const scale   = this.boardFitParams.scale;
 
         const src = window.cv.imread('cv_canvasRef');
+        //const ksize = new window.cv.Size(3, 3);
+        //window.cv.GaussianBlur(src, src, ksize, 0, 0, window.cv.BORDER_DEFAULT);
         const toDelete = [src];
+        /*
         const nameToHeatmap = {};
         const nameToScoreScaling = {};
         for (const name of ['hit', 'miss', 'remaining_squid', 'killed_squid']) {
@@ -267,15 +301,17 @@ class MainMap extends React.Component {
             //window.cv.matchTemplate(src, templ, dst, window.cv.TM_SQDIFF_NORMED, mask);
             //window.cv.matchTemplate(src, templ, dst, window.cv.TM_CCORR_NORMED, mask);
 
-            const ksize = new window.cv.Size(5, 5);
-            window.cv.GaussianBlur(dst, dst, ksize, 0, 0, window.cv.BORDER_DEFAULT);
+            //const ksize = new window.cv.Size(3, 3);
+            //window.cv.GaussianBlur(dst, dst, ksize, 0, 0, window.cv.BORDER_DEFAULT);
 
             nameToHeatmap[name] = dst;
             nameToScoreScaling[name] = 1; //1 / (scaledWidth * scaledHeight);
 
             toDelete.push(base_templ, templ, dst, mask);
         }
+        */
 
+        /*
         const sampleFrom = (name, x, y) => {
             const img = nameToHeatmap[name];
             // Because our convolution makes images slight smaller due to borders, we have to correct for that here.
@@ -283,6 +319,14 @@ class MainMap extends React.Component {
             const sampleOffsetY = Math.round((src.size().height - img.size().height) / 2);
             // Note that OpenCV defaults to (row, col), that is to say (y, x) for this routine.
             return img.floatAt(y - sampleOffsetY, x - sampleOffsetX);
+        };
+        */
+
+        const getPixelColor = (x, y) => {
+            const pixelPtr = src.ucharPtr(Math.round(y), Math.round(x));
+            const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
+            const energy = Math.sqrt(pixelColor.r * pixelColor.r + pixelColor.g * pixelColor.g + pixelColor.b * pixelColor.b);
+            return {...pixelColor, energy};
         };
 
         // Extract the info.
@@ -293,18 +337,48 @@ class MainMap extends React.Component {
         let remainingSquidColor = new window.cv.Scalar(50,  255, 100, 255);
         for (let y = 0; y < 8; y++) {
             for (let x = 0; x < 8; x++) {
-                let centerX = offsetX + scale * (105 + x * 52.5);
-                let centerY = offsetY + scale * (155 + y * 52.5);
+                let centerX = offsetX + scale * (105.25 + x * 52.2 + window.ADJUST_X);
+                let centerY = offsetY + scale * (155.75 + y * 52.2 + window.ADJUST_Y);
+                //const pixelPtr = src.ucharPtr(Math.round(centerY), Math.round(centerX));
+                //const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
+                //const energy = Math.sqrt(pixelColor.r * pixelColor.r + pixelColor.g * pixelColor.g + pixelColor.b * pixelColor.b);
                 
                 //const sampleOffsetX = src.size().width - 
                 //const hitScore  = -nameToHeatmap.hit.floatAt(centerY, centerX) * nameToScoreScaling.hit;
                 //const missScore = -nameToHeatmap.miss.floatAt(centerY, centerX) * nameToScoreScaling.miss;
-                const hitScore = sampleFrom('hit', centerX, centerY);
-                const missScore = sampleFrom('miss', centerX, centerY);
-                //console.log('Scores:', x, y, hitScore, missScore);
+                //const hitScore = sampleFrom('hit', centerX, centerY);
+                //const missScore = sampleFrom('miss', centerX, centerY);
+                // Get the actual pixel color.
+
+                const D = 2;
+                const center    = getPixelColor(centerX, centerY);
+                const upLeft    = getPixelColor(centerX - D, centerY - D);
+                const upRight   = getPixelColor(centerX + D, centerY - D);
+                const downLeft  = getPixelColor(centerX - D, centerY + D);
+                const downRight = getPixelColor(centerX + D, centerY + D);
+                //console.log('Scores:', x, y, hitScore, missScore, pixelColor);
+                const probablyRightBelowTheCursor = Math.max(upLeft.energy, upRight.energy) > 1.3 * Math.max(downLeft.energy, downRight.energy);
+                //console.log('Scores:', x, y, probablyRightBelowTheCursor, center, upLeft, upRight, downLeft, downRight);
                 let color = nothingColor;
-                if (hitScore > 0.5 || missScore > 0.3) {
+
+                //if (hitScore > 0.35 || missScore > 0.2) {
+                /*
+                if ((hitScore > 0.2 || missScore > 0.2) && pixelColor.r > 100) {
                     color = hitScore > missScore ? hitColor : missColor;
+                }
+                */
+                //const threshold = probablyRightBelowTheCursor ? 200 : 150;
+                const threshold = 200;
+                if (
+                    center.energy > threshold &&
+                    upLeft.energy > threshold &&
+                    upRight.energy > threshold &&
+                    downLeft.energy > threshold &&
+                    downRight.energy > threshold
+                ) {
+                    const maxRed   = Math.max(center.r, upLeft.r, upRight.r, downLeft.r, downRight.r);
+                    const maxGreen = Math.max(center.g, upLeft.g, upRight.g, downLeft.g, downRight.g);
+                    color = maxRed > maxGreen * 1.25 ? hitColor : missColor;
                 }
                 /*
                 if (hitScore > 1000 || missScore > 100) {
@@ -317,26 +391,37 @@ class MainMap extends React.Component {
                 window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
 
                 /*
+                const sampleOffsetX = Math.round((src.size().width - nameToHeatmap.hit.size().width) / 2);
+                const sampleOffsetY = Math.round((src.size().height - nameToHeatmap.hit.size().height) / 2);
+                tl = new window.cv.Point(centerX - 5 - sampleOffsetX, centerY - 5 - sampleOffsetY);
+                br = new window.cv.Point(centerX + 5 - sampleOffsetX, centerY + 5 - sampleOffsetY);
+                //window.cv.rectangle(nameToHeatmap.hit, tl, br, color, 1, window.cv.LINE_8, 0);
+                //*/
+
+                /*
                 const sampleOffsetX = Math.round((src.size().width - nameToHeatmap.miss.size().width) / 2);
                 const sampleOffsetY = Math.round((src.size().height - nameToHeatmap.miss.size().height) / 2);
                 tl = new window.cv.Point(centerX - 2 - sampleOffsetX, centerY - 2 - sampleOffsetY);
                 br = new window.cv.Point(centerX + 2 - sampleOffsetX, centerY + 2 - sampleOffsetY);
                 window.cv.rectangle(nameToHeatmap.miss, tl, br, color, 1, window.cv.LINE_8, 0);
-                */
+                //*/
             }
         }
         for (let squidIndex = 0; squidIndex < 3; squidIndex++) {
-            let centerX = Math.round(offsetX + scale * 648);
-            let centerY = Math.round(offsetY + scale * (122 + squidIndex * 89));
+            let centerX = Math.round(offsetX + scale * 648 + window.ADJUST_X);
+            let centerY = Math.round(offsetY + scale * (122 + squidIndex * 89) + window.ADJUST_Y);
+            const pixelPtr = src.ucharPtr(Math.round(centerY), Math.round(centerX));
+            const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
             //const killedScore    = -nameToHeatmap.killed_squid.floatAt(centerY, centerX) * nameToScoreScaling.killed_squid;
             //const remainingScore = -nameToHeatmap.remaining_squid.floatAt(centerY, centerX) * nameToScoreScaling.remaining_squid;
-            const killedScore = sampleFrom('killed_squid', centerX, centerY);
-            const remainingScore = sampleFrom('remaining_squid', centerX, centerY);
+            //const killedScore = sampleFrom('killed_squid', centerX, centerY);
+            //const remainingScore = sampleFrom('remaining_squid', centerX, centerY);
             let tl = new window.cv.Point(centerX - 15, centerY - 15);
             let br = new window.cv.Point(centerX + 15, centerY + 15);
-            let color = nothingColor;
-            if (killedScore > remainingScore)
-                color = killedSquidColor;
+            let color = remainingSquidColor;
+            //if (killedScore > remainingScore)
+            //    color = killedSquidColor;
+            color = pixelColor.r > pixelColor.b * 1.25 ? killedSquidColor : remainingSquidColor;
             window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
         }
         window.cv.imshow('cv_outputCanvasRef', src);
@@ -344,7 +429,7 @@ class MainMap extends React.Component {
         //window.cv.imshow('cv_outputCanvasRef', nameToHeatmap.hit);
         //nameToHeatmap.miss.convertTo(nameToHeatmap.miss, -1, 2e-7, 0);
         //nameToHeatmap.miss.convertTo(nameToHeatmap.miss, -1, 0.25, 0); // CCORR_NORMED
-        //window.cv.imshow('cv_outputCanvasRef', nameToHeatmap.miss);
+        //window.cv.imshow('cv_outputCanvasRef', nameToHeatmap.hit);
 
         for (const mat of toDelete)
             mat.delete();
@@ -502,6 +587,11 @@ class MainMap extends React.Component {
             </div>
             <br />
             <button style={{ fontSize: '150%' }} onClick={() => { this.clearField(); }}>Reset</button><br />
+            <button style={{ fontSize: '150%' }} onClick={() => { this.readBoardState(); }}>Do Computation</button><br />
+            <button style={{ fontSize: '150%' }} onClick={() => {
+                this.bannerCache = new Map();
+                this.getBoardRegistrationAndScale();
+            }}>Detect Board</button><br />
             {openingOptimizer && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
