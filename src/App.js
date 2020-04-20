@@ -205,7 +205,7 @@ class MainMap extends React.Component {
         if (!this.state.screenRecordingActive)
             return;
         this.updateCapture();
-        let bestGuessScale = 0.25; //0.5;
+        let bestGuessScale = 0.25 * 1.5; //0.5;
         let searchMargin = 0.7;
         for (let i = 0; i < 10; i++) {
             this.boardFitParams = await this.performGridSearch(
@@ -530,7 +530,7 @@ class MainMap extends React.Component {
         const context = canvas.getContext('2d');
         //const width = video.width;
         //const height = video.height;
-        const width = 640;
+        const width = 960;
         const height = Math.round(width * (video.videoHeight / video.videoWidth));
         console.log('Native image capture shape: ' + video.videoWidth + 'x' + video.videoHeight + ' -> scaling to: ' + width + 'x' + height);
         canvas.width = width;
@@ -630,7 +630,7 @@ class MainMap extends React.Component {
                         />
                     )}
                 </div>
-            )}      
+            )}
         </div>;
     }
 
