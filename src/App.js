@@ -47,6 +47,8 @@ window.ADJUST = 1.20;
 window.ADJUST_X = 0;
 window.ADJUST_Y = 5;
 
+window.JUST_ONCE = false;
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -75,13 +77,6 @@ class MainMap extends React.Component {
         this.referenceCanvases = {};
         // 'top_banner', 'record_banner',
         for (const name of ['hit', 'miss', 'killed_squid', 'remaining_squid', 'top_banner_new', 'bottom_banner_new']) {
-            //
-            /*
-            var c = document.getElementById("myCanvas");
-            var ctx = c.getContext("2d");
-            var img = document.getElementById("scream");
-            ctx.drawImage(img, 10, 10);
-            */
             const newCanvas = document.createElement('canvas');
             newCanvas.setAttribute('id', 'canvas_' + name);
             hiddenArea.appendChild(newCanvas);
@@ -96,8 +91,6 @@ class MainMap extends React.Component {
                 ctx.drawImage(newImage, 0, 0);
             };
             this.referenceCanvases[name] = newCanvas;
-            // <img src={process.env.PUBLIC_URL + '/images/hit.png'}></img>
-            //this.imageTags.push(newImageTag);
         }
     }
 
@@ -147,7 +140,7 @@ class MainMap extends React.Component {
             scores.push(this.testForTopBannerAtScale(scale));
         console.log('' + scores);
         */
-        let bestGuessScale = 0.5; //0.5;
+        let bestGuessScale = 0.25; //0.5;
         let searchMargin = 0.7;
         for (let i = 0; i < 10; i++) {
             this.boardFitParams = await this.performGridSearch(
@@ -162,18 +155,23 @@ class MainMap extends React.Component {
         // Force a rerender.
         this.bannerCache.delete(bestGuessScale);
         this.testForTopBannerAtScale(bestGuessScale);
+        this.testForBottomBanner();
+        console.log('Final fit params:', this.boardFitParams);
         await new Promise(resolve => setTimeout(resolve, 100));
+        this.readBoardState();
         /*
         setTimeout(
             () => this.readBoardState(),
             250,
         )
         //*/
-        /*
-        setInterval(
-            () => this.readBoardState(),
-            50,
-        )
+        //*
+        if (!window.JUST_ONCE) {
+            setInterval(
+                () => this.readBoardState(),
+                50,
+            );
+        }
         //*/
         //this.readBoardState();
         /*
@@ -199,6 +197,72 @@ class MainMap extends React.Component {
         return bestParams;
     }
 
+    testForBottomBanner() {
+        const ADJUST = window.ADJUST;
+        const src = window.cv.imread('cv_canvasRef');
+
+        const base_templ = window.cv.imread('canvas_bottom_banner_new'); //this.referenceCanvases['miss'];
+        //const ADJUST = 1.22;
+
+        // TODO: Don't hardcode these sizes.
+        //const scaled_banner_width = Math.round(494 * scale);
+        //const scaled_banner_height = Math.round(129 * scale);
+        const scaled_banner_width = Math.round(base_templ.size().width * this.boardFitParams.scale);
+        const scaled_banner_height = Math.round(base_templ.size().height * this.boardFitParams.scale);
+        let templ = new window.cv.Mat();
+        let dsize = new window.cv.Size(scaled_banner_width, scaled_banner_height);
+        window.cv.resize(base_templ, templ, dsize, 0, 0, window.cv.INTER_AREA);
+
+        const dst = new window.cv.Mat();
+        const mask = new window.cv.Mat();
+        const matchMode = window.cv.TM_CCOEFF_NORMED;
+        window.cv.matchTemplate(src, templ, dst, matchMode, mask);
+        let result = window.cv.minMaxLoc(dst, mask);
+        let maxPoint = result.maxLoc;
+        let color = new window.cv.Scalar(255, 0, 0, 255);
+        let point = new window.cv.Point(maxPoint.x + templ.cols, maxPoint.y + templ.rows);
+        window.cv.rectangle(src, maxPoint, point, color, 2, window.cv.LINE_8, 0);
+        window.cv.imshow('cv_outputCanvasRef', src);
+        src.delete(); base_templ.delete(); templ.delete(); dst.delete(); mask.delete();
+        this.boardFitParams.bottomBannerOffset = {
+            x: maxPoint.x, y: maxPoint.y,
+        };
+    }
+
+    getCellXY(x, y) {
+        const bannerVerticalSpacing = this.boardFitParams.bottomBannerOffset.y - this.boardFitParams.topBannerOffset.y;
+        let aspectRatioFactor = bannerVerticalSpacing / (828 * this.boardFitParams.scale);
+        if (aspectRatioFactor < 0.95 || aspectRatioFactor > 1.05)
+            aspectRatioFactor = 1;
+
+        //const aspectRatioFactor = 1.0;
+        // Center of 0,0 cell: 161, 244
+        // Center of 1,0 cell: 240, 244
+        // Top of bottom banner: 832
+
+        //let centerX = offsetX + scale * (105.25 + x * 52.2 + window.ADJUST_X);
+        //let centerY = offsetY + scale * (155.75 + y * 52.2 + window.ADJUST_Y);
+        return {
+            x: this.boardFitParams.topBannerOffset.x + this.boardFitParams.scale * (161.5 + 75.5 * x),
+            y: this.boardFitParams.topBannerOffset.y + this.boardFitParams.scale * aspectRatioFactor * (239 + 78.6 * y),
+        };
+    }
+
+    getSquidIndicatorXY(y) {
+        const bannerVerticalSpacing = this.boardFitParams.bottomBannerOffset.y - this.boardFitParams.topBannerOffset.y;
+        let aspectRatioFactor = bannerVerticalSpacing / (828 * this.boardFitParams.scale);
+        if (aspectRatioFactor < 0.95 || aspectRatioFactor > 1.05)
+            aspectRatioFactor = 1;
+        //const aspectRatioFactor = 1.0;
+        // Center of 0,0 squid: 948, 188
+        // Center of 1,0 squid: 948, 324
+
+        return {
+            x: this.boardFitParams.topBannerOffset.x + this.boardFitParams.scale * 948,
+            y: this.boardFitParams.topBannerOffset.y + this.boardFitParams.scale * aspectRatioFactor * (185 + 133 * y),
+        };
+    }
+
     testForTopBannerAtScale(scale) {
         if (this.bannerCache.has(scale)) {
             return this.bannerCache.get(scale);
@@ -211,14 +275,16 @@ class MainMap extends React.Component {
         //const base_templ = window.cv.imread('canvas_top_banner'); //this.referenceCanvases['miss'];
         //const ADJUST = 1;
 
-        const base_templ = window.cv.imread('canvas_record_banner'); //this.referenceCanvases['miss'];
+        const base_templ = window.cv.imread('canvas_top_banner_new'); //this.referenceCanvases['miss'];
         //const ADJUST = 1.22;
 
         // TODO: Don't hardcode these sizes.
         //const scaled_banner_width = Math.round(494 * scale);
         //const scaled_banner_height = Math.round(129 * scale);
-        const scaled_banner_width = Math.round(406 * scale * ADJUST);
-        const scaled_banner_height = Math.round(110 * scale * ADJUST);
+        //const scaled_banner_width = Math.round(406 * scale * ADJUST);
+        //const scaled_banner_height = Math.round(110 * scale * ADJUST);
+        const scaled_banner_width = Math.round(base_templ.size().width * scale);
+        const scaled_banner_height = Math.round(base_templ.size().height * scale);
         let templ = new window.cv.Mat();
         let dsize = new window.cv.Size(scaled_banner_width, scaled_banner_height);
         // You can try more different parameters
@@ -234,6 +300,7 @@ class MainMap extends React.Component {
         let color = new window.cv.Scalar(255, 0, 0, 255);
         let point = new window.cv.Point(maxPoint.x + templ.cols, maxPoint.y + templ.rows);
         window.cv.rectangle(src, maxPoint, point, color, 2, window.cv.LINE_8, 0);
+        if (false) {
         // Draw each of the little squares.
         for (let y = 0; y < 8; y++) {
             for (let x = 0; x < 8; x++) {
@@ -255,6 +322,7 @@ class MainMap extends React.Component {
             let br = new window.cv.Point(centerX + 15, centerY + 15);
             window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
         }
+        }
         window.cv.imshow('cv_outputCanvasRef', src);
         src.delete(); base_templ.delete(); templ.delete(); dst.delete(); mask.delete();
         //console.log(result);
@@ -267,20 +335,20 @@ class MainMap extends React.Component {
         this.bannerCache.set(scale, score);
         return {
             score, scale,
-            offset: {x: maxPoint.x, y: maxPoint.y},
+            topBannerOffset: {x: maxPoint.x, y: maxPoint.y},
         };
     }
 
     readBoardState() {
         this.updateCapture();
         const t0 = performance.now();
-        const offsetX = this.boardFitParams.offset.x;
-        const offsetY = this.boardFitParams.offset.y;
+        const offsetX = this.boardFitParams.topBannerOffset.x;
+        const offsetY = this.boardFitParams.topBannerOffset.y;
         const scale   = this.boardFitParams.scale;
 
         const src = window.cv.imread('cv_canvasRef');
-        //const ksize = new window.cv.Size(3, 3);
-        //window.cv.GaussianBlur(src, src, ksize, 0, 0, window.cv.BORDER_DEFAULT);
+        const ksize = new window.cv.Size(3, 3);
+        window.cv.GaussianBlur(src, src, ksize, 0, 0, window.cv.BORDER_DEFAULT);
         const toDelete = [src];
         /*
         const nameToHeatmap = {};
@@ -335,10 +403,26 @@ class MainMap extends React.Component {
         let missColor           = new window.cv.Scalar(100, 255, 0,   255);
         let killedSquidColor    = new window.cv.Scalar(255, 100, 100, 255);
         let remainingSquidColor = new window.cv.Scalar(50,  255, 100, 255);
+        let mostLikelyCursorLocation = null;
+        let bestCursorScore = -1;
         for (let y = 0; y < 8; y++) {
             for (let x = 0; x < 8; x++) {
-                let centerX = offsetX + scale * (105.25 + x * 52.2 + window.ADJUST_X);
-                let centerY = offsetY + scale * (155.75 + y * 52.2 + window.ADJUST_Y);
+                const cellXY = this.getCellXY(x, y);
+                const wayDown = getPixelColor(cellXY.x, cellXY.y + 15);
+                if (wayDown.energy > bestCursorScore) {
+                    bestCursorScore = wayDown.energy;
+                    mostLikelyCursorLocation = {x, y};
+                }
+            }
+        }
+        for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+                //let centerX = offsetX + scale * (105.25 + x * 52.2 + window.ADJUST_X);
+                //let centerY = offsetY + scale * (155.75 + y * 52.2 + window.ADJUST_Y);
+                const cellXY = this.getCellXY(x, y);
+                const centerX = cellXY.x;
+                const centerY = cellXY.y;
+
                 //const pixelPtr = src.ucharPtr(Math.round(centerY), Math.round(centerX));
                 //const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
                 //const energy = Math.sqrt(pixelColor.r * pixelColor.r + pixelColor.g * pixelColor.g + pixelColor.b * pixelColor.b);
@@ -350,15 +434,40 @@ class MainMap extends React.Component {
                 //const missScore = sampleFrom('miss', centerX, centerY);
                 // Get the actual pixel color.
 
+                // WARNING: This isn't appropriately scale insensitive.
                 const D = 2;
-                const center    = getPixelColor(centerX, centerY);
-                const upLeft    = getPixelColor(centerX - D, centerY - D);
-                const upRight   = getPixelColor(centerX + D, centerY - D);
-                const downLeft  = getPixelColor(centerX - D, centerY + D);
-                const downRight = getPixelColor(centerX + D, centerY + D);
+                //const farD = 3;
+                const center     = getPixelColor(centerX,        centerY);
+                const upLeft     = getPixelColor(centerX - D,    centerY - D);
+                const upRight    = getPixelColor(centerX + D,    centerY - D);
+                const downLeft   = getPixelColor(centerX - D,    centerY + D);
+                const downRight  = getPixelColor(centerX + D,    centerY + D);
+                const probablyInsideCursor = x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y;
+                // This variable says if we think our left side is likely corrupted by the cursor's halo.
+                const cursorHaloLeft  = probablyInsideCursor || x === mostLikelyCursorLocation.x + 1 && y === mostLikelyCursorLocation.y;
+                const cursorHaloRight = probablyInsideCursor || x === mostLikelyCursorLocation.x - 1 && y === mostLikelyCursorLocation.y;
+                const cursorHaloUp    = probablyInsideCursor || x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y + 1;
+                const cursorHaloDown  = probablyInsideCursor || x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y - 1;
+                const cursorHaloUL = cursorHaloUp   || cursorHaloLeft;
+                const cursorHaloUR = cursorHaloUp   || cursorHaloRight;
+                const cursorHaloDL = cursorHaloDown || cursorHaloLeft;
+                const cursorHaloDR = cursorHaloDown || cursorHaloRight;
+                
+                /*
+                const farUpLeft  = getPixelColor(centerX - farD, centerY - farD);
+                const farUpRight = getPixelColor(centerX + farD, centerY - farD);
+                */
                 //console.log('Scores:', x, y, hitScore, missScore, pixelColor);
-                const probablyRightBelowTheCursor = Math.max(upLeft.energy, upRight.energy) > 1.3 * Math.max(downLeft.energy, downRight.energy);
-                //console.log('Scores:', x, y, probablyRightBelowTheCursor, center, upLeft, upRight, downLeft, downRight);
+                //const probablyRightBelowTheCursor = Math.max(upLeft.energy, upRight.energy) > 1.3 * Math.max(downLeft.energy, downRight.energy);
+                /*
+                const probablyEmptyCellInsideCursor = (
+                    //Math.min(upLeft.b, upRight.b) > Math.max(upLeft.g, upRight.g) &&
+                    Math.min(downLeft.energy, downRight.energy) > Math.max(farUpLeft.energy, farUpRight.energy) * 1.1 &&
+                    //Math.min(downLeft.energy, downRight.energy) > farTop.energy * 1.2 &&
+                    Math.min(downLeft.energy, downRight.energy) > 150 &&
+                    center.energy > 300
+                );
+                */
                 let color = nothingColor;
 
                 //if (hitScore > 0.35 || missScore > 0.2) {
@@ -368,7 +477,26 @@ class MainMap extends React.Component {
                 }
                 */
                 //const threshold = probablyRightBelowTheCursor ? 200 : 150;
-                const threshold = 200;
+                //const threshold = probablyEmptyCellInsideCursor ? 210 : 200;
+                
+                //let threshold = probablyInsideCursor ? 210 : 190;
+                let threshold = probablyInsideCursor ? 240 : 220;
+                const passingCount = (
+                    (center.energy    >= threshold) +
+                    (upLeft.energy    >= (cursorHaloUL ? 240 : 220)) +
+                    (upRight.energy   >= (cursorHaloUR ? 240 : 220)) +
+                    (downLeft.energy  >= (cursorHaloDL ? 240 : 220)) +
+                    (downRight.energy >= (cursorHaloDL ? 240 : 220))
+                );
+                const greenerMargin = probablyInsideCursor ? 1 : 1.02;
+                const greenerThanBlueCount = (
+                    (center.g    >= center.b *    greenerMargin) +
+                    (upLeft.g    >= upLeft.b *    (cursorHaloUL ? greenerMargin : 1.05)) +
+                    (upRight.g   >= upRight.b *   (cursorHaloUR ? greenerMargin : 1.05)) +
+                    (downLeft.g  >= downLeft.b *  (cursorHaloDL ? greenerMargin : 1.05)) +
+                    (downRight.g >= downRight.b * (cursorHaloDR ? greenerMargin : 1.05))
+                );
+                /*
                 if (
                     center.energy > threshold &&
                     upLeft.energy > threshold &&
@@ -376,9 +504,21 @@ class MainMap extends React.Component {
                     downLeft.energy > threshold &&
                     downRight.energy > threshold
                 ) {
+                */
+                // There's an obnoxious light in this cell, so we have to special case it.
+                const disqualified = x === 4 && y === 6 && center.energy < 200;
+                if (
+                    ((passingCount >= 4 && greenerThanBlueCount >= 3) || (passingCount >= 3 && greenerThanBlueCount >= 4)) &&
+                    !disqualified
+                ) {
                     const maxRed   = Math.max(center.r, upLeft.r, upRight.r, downLeft.r, downRight.r);
                     const maxGreen = Math.max(center.g, upLeft.g, upRight.g, downLeft.g, downRight.g);
                     color = maxRed > maxGreen * 1.25 ? hitColor : missColor;
+                }
+                if (window.JUST_ONCE) {
+                    if (probablyInsideCursor)
+                        console.log('INSIDE!!!!!');
+                    console.log('Scores:', x, y, probablyInsideCursor, greenerThanBlueCount, center, upLeft, upRight, downLeft, downRight);
                 }
                 /*
                 if (hitScore > 1000 || missScore > 100) {
@@ -386,8 +526,8 @@ class MainMap extends React.Component {
                 }
                 */
                 //if (hitScore)
-                let tl = new window.cv.Point(centerX - 9, centerY - 9);
-                let br = new window.cv.Point(centerX + 9, centerY + 9);
+                let tl = new window.cv.Point(centerX - 7, centerY - 7);
+                let br = new window.cv.Point(centerX + 7, centerY + 7);
                 window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
 
                 /*
@@ -408,8 +548,11 @@ class MainMap extends React.Component {
             }
         }
         for (let squidIndex = 0; squidIndex < 3; squidIndex++) {
-            let centerX = Math.round(offsetX + scale * 648 + window.ADJUST_X);
-            let centerY = Math.round(offsetY + scale * (122 + squidIndex * 89) + window.ADJUST_Y);
+            //let centerX = Math.round(offsetX + scale * 648 + window.ADJUST_X);
+            //let centerY = Math.round(offsetY + scale * (122 + squidIndex * 89) + window.ADJUST_Y);
+            const cellXY = this.getSquidIndicatorXY(squidIndex);
+            const centerX = cellXY.x;
+            const centerY = cellXY.y;
             const pixelPtr = src.ucharPtr(Math.round(centerY), Math.round(centerX));
             const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
             //const killedScore    = -nameToHeatmap.killed_squid.floatAt(centerY, centerX) * nameToScoreScaling.killed_squid;
