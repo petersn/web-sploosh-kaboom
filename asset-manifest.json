@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/web-sploosh-kaboom/static/css/main.27fd15f6.chunk.css",
-    "main.js": "/web-sploosh-kaboom/static/js/main.c6f968f0.chunk.js",
-    "main.js.map": "/web-sploosh-kaboom/static/js/main.c6f968f0.chunk.js.map",
+    "main.js": "/web-sploosh-kaboom/static/js/main.012d5671.chunk.js",
+    "main.js.map": "/web-sploosh-kaboom/static/js/main.012d5671.chunk.js.map",
     "runtime-main.js": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js",
     "runtime-main.js.map": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js.map",
     "static/js/2.bd9554a8.chunk.js": "/web-sploosh-kaboom/static/js/2.bd9554a8.chunk.js",
     "static/js/2.bd9554a8.chunk.js.map": "/web-sploosh-kaboom/static/js/2.bd9554a8.chunk.js.map",
     "index.html": "/web-sploosh-kaboom/index.html",
-    "precache-manifest.87eba22eaeb9b18a18e9d870dab74170.js": "/web-sploosh-kaboom/precache-manifest.87eba22eaeb9b18a18e9d870dab74170.js",
+    "precache-manifest.24634655b03815ac6bc6664e1e8bb8d8.js": "/web-sploosh-kaboom/precache-manifest.24634655b03815ac6bc6664e1e8bb8d8.js",
     "service-worker.js": "/web-sploosh-kaboom/service-worker.js",
     "static/css/main.27fd15f6.chunk.css.map": "/web-sploosh-kaboom/static/css/main.27fd15f6.chunk.css.map",
     "static/js/2.bd9554a8.chunk.js.LICENSE.txt": "/web-sploosh-kaboom/static/js/2.bd9554a8.chunk.js.LICENSE.txt"
@@ -17,6 +17,6 @@
     "static/js/runtime-main.f6a4d017.js",
     "static/js/2.bd9554a8.chunk.js",
     "static/css/main.27fd15f6.chunk.css",
-    "static/js/main.c6f968f0.chunk.js"
+    "static/js/main.012d5671.chunk.js"
   ]
 }
