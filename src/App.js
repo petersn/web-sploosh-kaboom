@@ -79,6 +79,41 @@ if (!window.JUST_ONCE) {
     */
 }
 
+function sampleSquid(length) {
+    const x = Math.round(Math.random() * 8);
+    const y = Math.round(Math.random() * 8);
+    const direction = Math.random() < 0.5;
+    const cells = [[x, y]];
+    for (let i = 0; i < length - 1; i++) {
+        const cell = cells[cells.length - 1];
+        const newXY = direction ? [cell[0] + 1, cell[1]] : [cell[0], cell[1] + 1];
+        cells.push(newXY);
+    }
+    return cells;
+}
+
+function generateLayout() {
+    const layout = {};
+    const hitLocations = {};
+    for (const n of [2, 3, 4]) {
+        while (true) {
+            const candidate = sampleSquid(n);
+            let isAdmissible = true;
+            for (const cell of candidate)
+                if (cell[0] > 7 || cell[1] > 7 || hitLocations[cell] === true)
+                    isAdmissible = false;
+            if (isAdmissible) {
+                layout['squid' + n] = candidate;
+                for (const cell of candidate)
+                    hitLocations[cell] = true;
+                break;
+            }
+        }
+    }
+    console.log('Generated:', layout);
+    return layout;
+}
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -135,7 +170,11 @@ class MainMap extends React.Component {
                 probs[[x, y]] = 0.0;
             }
         }
+        // Select a particular layout, for practice mode.
+        const squidLayout = generateLayout();
         return {
+            mode: 'calculator',
+            squidLayout,
             grid,
             squidsGotten: 'unknown',
             probs,
@@ -586,24 +625,56 @@ class MainMap extends React.Component {
     onClick(x, y) {
         const grid = { ...this.state.grid };
         let gridValue = grid[[x, y]];
-        switch (gridValue) {
-            case null:
-                gridValue = 'MISS';
-                break;
-            case 'MISS':
+        let squidsGotten = this.state.squidsGotten;
+
+        if (this.state.mode === 'calculator') {
+            switch (gridValue) {
+                case null:
+                    gridValue = 'MISS';
+                    break;
+                case 'MISS':
+                    gridValue = 'HIT';
+                    break;
+                case 'HIT':
+                    gridValue = null;
+                    break;
+            }
+            grid[[x, y]] = gridValue;
+        } else {
+            // Determine from the random layout.
+            if (gridValue !== null)
+                return;
+            const arrayContains = (arr) => {
+                for (const cell of arr)
+                    if (cell[0] === x && cell[1] === y)
+                        return true;
+                return false;
+            }
+            if (arrayContains([...this.state.squidLayout.squid2, ...this.state.squidLayout.squid3, ...this.state.squidLayout.squid4])) {
                 gridValue = 'HIT';
-                break;
-            case 'HIT':
-                gridValue = null;
-                break;
+            } else {
+                gridValue = 'MISS';
+            }
+            grid[[x, y]] = gridValue;
+            // Compute the killed squid count.
+            squidsGotten = 0;
+            for (const n of ['2', '3', '4']) {
+                const squid = this.state.squidLayout['squid' + n];
+                let killed = true;
+                for (const cell of squid)
+                    if (grid[cell] !== 'HIT')
+                        killed = false;
+                squidsGotten += killed;
+            }
+            this.setState({ squidsGotten });
         }
-        grid[[x, y]] = gridValue;
         this.setState({ grid });
-        this.doComputation(grid, this.state.squidsGotten);
+        this.doComputation(grid, squidsGotten);
     }
 
     clearField() {
         const newState = this.makeEmptyState();
+        newState.mode = this.state.mode;
         newState.screenRecordingActive = this.state.screenRecordingActive;
         newState.doVideoProcessing = this.state.doVideoProcessing;
         this.setState(newState);
@@ -683,6 +754,7 @@ class MainMap extends React.Component {
                     <option value="0">0</option>
                     <option value="1">1</option>
                     <option value="2">2</option>
+                    <option value="3">3</option>
                 </select>
                 <br />
                 {/*
@@ -692,8 +764,16 @@ class MainMap extends React.Component {
                 */}
             </div>
             <br />
-            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button><br />
-            {openingOptimizer && (!this.state.screenRecordingActive) && <>
+            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
+            <select
+                style={{ marginLeft: '20px', fontSize: '150%' }}
+                value={this.state.mode}
+                onChange={(event) => this.setState({ mode: event.target.value })}
+            >
+                <option value="calculator">Calculator Mode</option>
+                <option value="practice">Practice Mode</option>
+            </select><br />
+            {openingOptimizer && (!this.state.screenRecordingActive) && this.state.mode === 'calculator' && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
@@ -770,7 +850,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.1)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.2)</span>
         </div>;
     }
 }
