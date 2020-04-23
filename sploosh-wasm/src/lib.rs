@@ -192,7 +192,6 @@ impl PossibleBoards {
 			board_priors.push(0.0);
 		}
 		fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
-			return 1.0;
 			let mut v = x / sigma;
 			return (v * v / -2.0).exp();
 		}
