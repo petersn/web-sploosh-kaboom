@@ -372,13 +372,14 @@ class MainMap extends React.Component {
         */
     }
 
-    initializeTurboBlurboMode() {
+    initializeTurboBlurboMode(bigTable) {
         if (this.state.turboBlurboMode !== false)
             return;
         this.setState({turboBlurboMode: 'initializing'});
         this.boardIndices = makeBoardIndicesTable();
         const req = new XMLHttpRequest();
-        req.open('GET', process.env.PUBLIC_URL + '/board_table_5M.bin', true);
+        const tableName = bigTable ? '/board_table_25M.bin' : '/board_table_5M.bin';
+        req.open('GET', process.env.PUBLIC_URL + tableName, true);
         req.responseType = 'arraybuffer';
         req.onload = (evt) => {
             this.boardTable = new Uint32Array(req.response);
@@ -1049,8 +1050,11 @@ class MainMap extends React.Component {
                 <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.<br/></div>
             </>}
             <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.initializeTurboBlurboMode();
+                this.initializeTurboBlurboMode(false);
             }}>Initialize Turbo Blurbo Mode</button><br/>
+            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                this.initializeTurboBlurboMode(true);
+            }}>Initialize Turbo Blurbo Mode (big table)</button><br/>
 
             {/*
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
