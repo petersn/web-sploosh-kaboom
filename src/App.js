@@ -153,7 +153,7 @@ if (!window.JUST_ONCE) {
     /*
     setInterval(
         () => {
-            
+
         },
         50,
     );
@@ -635,7 +635,7 @@ class MainMap extends React.Component {
                 const cursorHaloUR = cursorHaloUp   || cursorHaloRight;
                 const cursorHaloDL = cursorHaloDown || cursorHaloLeft;
                 const cursorHaloDR = cursorHaloDown || cursorHaloRight;
-                
+
                 let color = nothingColor;
 
                 let threshold = probablyInsideCursor ? 240 : 220;
@@ -839,23 +839,24 @@ class MainMap extends React.Component {
         }
 
         if (probabilities !== undefined) {
-            let maxY = 0;
-            let maxX = 0;
-            let highestProb = -1;
+            let bestY = 0;
+            let bestX = 0;
+            let bestProb = -1;
             let probs = [];
 
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     probs[[x, y]] = probabilities[8 * y + x];
-                    if (grid[[x, y]] === null && probabilities[8 * y + x] > highestProb) {
-                        highestProb = probabilities[8 * y + x];
-                        maxX = x;
-                        maxY = y;
+                    if (grid[[x, y]] === null && Math.abs(0.5-probabilities[8 * y + x]) < Math.abs(0.5-bestProb)) {
+                        // Determine square with probability closest to 50%
+                        bestProb = probabilities[8 * y + x];
+                        bestX = x;
+                        bestY = y;
                     }
                 }
             }
             const observationProb = probabilities[64];
-            this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid: true, observationProb });
+            this.setState({ probs, best: bestProb >= 0 ? [bestX, bestY] : null, valid: true, observationProb });
         }
         const t1 = performance.now();
         this.setState({lastComputationTime: t1 - t0});
