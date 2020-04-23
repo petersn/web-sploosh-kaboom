@@ -1,8 +1,15 @@
 import React from 'react';
 import './App.css';
-import init, { calculate_probabilities } from './wasm/sploosh_wasm.js';
+import $ from 'jquery';
+import init, {
+    set_board_table,
+    calculate_probabilities_with_board_constraints,
+    calculate_probabilities_from_game_history,
+} from './wasm/sploosh_wasm.js';
+import { findAllByPlaceholderText } from '@testing-library/react';
+import NumericInput from 'react-numeric-input';
 const interpolate = require('color-interpolate');
-//const opencv = require('opencv.js');
+
 
 //const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
 //const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
@@ -14,6 +21,13 @@ const naturalsUpTo = (n) => [...Array(n).keys()];
 class Tile extends React.Component {
     render() {
         const isBest = this.props.best !== null && this.props.best[0] == this.props.x && this.props.best[1] == this.props.y;
+
+        let backgroundColor = this.props.backgroundColor;
+        if (backgroundColor === undefined) {
+            backgroundColor = this.props.text === null ? colormap(this.props.prob) : (
+                this.props.text === 'HIT' ? '#a2a' : '#44a'
+            );
+        }
 
         return <div
             key={this.props.x + ',' + this.props.y}
@@ -33,10 +47,9 @@ class Tile extends React.Component {
                 WebkitUserSelect: 'none',
                 msUserSelect: 'none',
                 color: 'white',
+                fontSize: this.props.fontSize,
                 opacity: this.props.opacity,
-                backgroundColor: this.props.text === null ? colormap(this.props.prob) : (
-                    this.props.text === 'HIT' ? '#a2a' : '#44a'
-                ),
+                backgroundColor,
             }}
             onClick={this.props.onClick}
         >
@@ -65,6 +78,74 @@ async function globalProcessingTick() {
     // We use setTimeout nested like this rather than setInterval so that the ticks
     // don't get bunched up if the processing takes too long.
     setTimeout(globalProcessingTick, 25);
+}
+
+function makeBoardIndicesTable() {
+    /*
+    // Cache in localStorage
+    const keyName = 'BoardIndicesTable';
+    const fromCache = window.localStorage.getItem(keyName);
+    if (fromCache !== null)
+        return JSON.parse(fromCache);
+    const value = rawMakeBoardIndicesTable();
+    window.localStorage.setItem(keyName, JSON.stringify(value));
+    return value;
+    */
+    return rawMakeBoardIndicesTable();
+    /*
+    const req = new XMLHttpRequest();
+    req.open('GET', process.env.PUBLIC_URL + '/board_indices.json', false);
+    req.send(null);
+    return JSON.parse(req.responseText);
+    */
+}
+
+function rawMakeBoardIndicesTable() {
+    // This convention here has to match that in the Rust component and table building C++ exactly!
+    const descs = [];
+    for (let y = 0; y < 8; y++)
+        for (let x = 0; x < 8; x++)
+            for (const direction of [false, true])
+                descs.push({x, y, direction});
+    const allBoards = [];
+    const boardIndices = {};
+    function placeSquid(board, desc, length) {
+        for (let i = 0; i < length; i++) {
+            let {x, y} = desc;
+            if (desc.direction)
+                x += i;
+            else
+                y += i;
+            const index = x + 8 * y;
+            if (x >= 8 || y >= 8)
+                return;
+            board[index] = length;
+        }
+    }
+    const board = new Array(64).fill(0);
+
+    for (const squid2 of descs) {
+        for (const squid3 of descs) {
+            for (const squid4 of descs) {
+                board.fill(0);
+                placeSquid(board, squid2, 2);
+                placeSquid(board, squid3, 3);
+                placeSquid(board, squid4, 4);
+                let count = 0;
+                for (const entry of board)
+                    count += entry
+                if (count !== 2*2 + 3*3 + 4*4)
+                    continue;
+                allBoards.push(Array.from(board));
+            }
+        }
+    }
+    let index = 0;
+    for (const board of allBoards) {
+        boardIndices[board.map((i) => i === 0 ? '.' : i).join('')] = index;
+        index++;
+    }
+    return boardIndices;
 }
 
 if (!window.JUST_ONCE) {
@@ -114,12 +195,73 @@ function generateLayout() {
     return layout;
 }
 
+class LayoutDrawingBoard extends React.Component {
+    constructor() {
+        super();
+        const grid = [];
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
+                grid[[x, y]] = '.';
+        this.state = { grid };
+    }
+
+    onClick(x, y) {
+        const grid = {...this.state.grid};
+        switch (grid[[x, y]]) {
+            case '.': grid[[x, y]] = '2'; break;
+            case '2': grid[[x, y]] = '3'; break;
+            case '3': grid[[x, y]] = '4'; break;
+            case '4': grid[[x, y]] = '.'; break;
+        }
+        this.setState({ grid });
+    }
+
+    getLayoutString() {
+        let layoutString = '';
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
+                layoutString += this.state.grid[[x, y]];
+        return layoutString;
+    }
+
+    render() {
+        const layoutString = this.getLayoutString();
+        let boardIndex = this.props.parent.boardIndices[layoutString];
+
+        return <div style={{
+            margin: '20px',
+            display: 'inline-block',
+            color: 'white',
+        }}>
+            {naturalsUpTo(8).map(
+                (y) => <div key={y} style={{
+                    display: 'flex',
+                }}>
+                    {naturalsUpTo(8).map(
+                        (x) => <Tile
+                            key={x + ',' + y}
+                            x={x} y={y}
+                            onClick={() => this.onClick(x, y)}
+                            text={this.state.grid[[x, y]]}
+                            valid={true}
+                            best={false}
+                            fontSize={'200%'}
+                        />
+                    )}
+                </div>
+            )}<br/>
+            Squid Layout: {boardIndex}
+        </div>;
+    }
+}
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
     //referenceCanvasRef = React.createRef();
     outputCanvasRef = React.createRef();
     hiddenAreaRef = React.createRef();
+    layoutDrawingBoardRefs = [React.createRef(), React.createRef(), React.createRef()];
 
     constructor() {
         super();
@@ -185,6 +327,13 @@ class MainMap extends React.Component {
             doVideoProcessing: false,
             lastComputationTime: -1,
             lastCVTime: -1,
+            turboBlurboMode: false,
+
+            potentialMatches: [],
+            firstBoardStepsThousands: 100,
+            firstBoardStepsThousandsStdDev: 100,
+            nextBoardStepsThousands: 3,
+            nextBoardStepsThousandsStdDev: 1,
         };
     }
 
@@ -221,6 +370,28 @@ class MainMap extends React.Component {
             1000,
         );
         */
+    }
+
+    initializeTurboBlurboMode() {
+        if (this.state.turboBlurboMode !== false)
+            return;
+        this.setState({turboBlurboMode: 'initializing'});
+        this.boardIndices = makeBoardIndicesTable();
+        const req = new XMLHttpRequest();
+        req.open('GET', process.env.PUBLIC_URL + '/board_table_5M.bin', true);
+        req.responseType = 'arraybuffer';
+        req.onload = (evt) => {
+            this.boardTable = new Uint32Array(req.response);
+            // Warning: Do I need to await wasm here first?
+            console.log('Board table length:', this.boardTable.length);
+            // Make sure every value is in range.
+            for (const v of this.boardTable)
+                if (v > 604583)
+                    alert('BUG BUG BUG: Bad value in board table: ' + v);
+            set_board_table(this.boardTable);
+            this.setState({turboBlurboMode: true});
+        };
+        req.send();
     }
 
     toggleVideoProcessing() {
@@ -577,6 +748,19 @@ class MainMap extends React.Component {
         context.drawImage(video, 0, 0, width, height);
     }
 
+    *findMatchingLocations(observedBoards, startIndex, scanRange) {
+        if (observedBoards.length === 0)
+            yield [];
+        // Try to find the first match.
+        const soughtBoard = observedBoards[0];
+        const boardTable = this.boardTable;
+        const indexMax = Math.min(boardTable.length, startIndex + scanRange);
+        for (let i = startIndex; i < indexMax; i++)
+            if (boardTable[i] === soughtBoard)
+                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 10000))
+                    yield [i, ...subResult];
+    }
+
     async doComputation(grid, squidsGotten) {
         const t0 = performance.now();
         const hits = [];
@@ -596,8 +780,62 @@ class MainMap extends React.Component {
                 squids_gotten = Number(n);
 
         await wasm;
-        const probabilities = calculate_probabilities(Uint8Array.from(hits), Uint8Array.from(misses), squids_gotten);
-        //console.debug(probabilities);
+
+        let probabilities;
+
+        if (this.state.turboBlurboMode) {
+            // Figure out how many history boards we have.
+            const rawObservedBoards = this.layoutDrawingBoardRefs
+                .map((ref) => this.boardIndices[ref.current.getLayoutString()]);
+            const observedBoards = [];
+            for (const ob of rawObservedBoards) {
+                if (ob === undefined)
+                    break;
+                observedBoards.push(ob);
+            }
+            console.log('observedBoards:', observedBoards);
+
+            const matches = [];
+            for (const match of this.findMatchingLocations(observedBoards, 0, 1000000))
+                matches.push(match);
+            this.setState({potentialMatches: matches});
+
+            const priorStepsFromPreviousMeans = [];
+            const priorStepsFromPreviousStdDevs = [];
+            let first = true;
+            for (const index of [...observedBoards, null]) {
+                if (index === undefined)
+                    break;
+                if (first) {
+                    priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.firstBoardStepsThousands));
+                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
+                } else {
+                    priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
+                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.nextBoardStepsThousandsStdDev));
+                }
+                first = false;
+            }
+
+            console.log('Turbo:', observedBoards, priorStepsFromPreviousMeans, priorStepsFromPreviousStdDevs);
+
+            probabilities = calculate_probabilities_from_game_history(
+                Uint8Array.from(hits),
+                Uint8Array.from(misses),
+                squids_gotten,
+                Uint32Array.from(observedBoards),
+                Uint32Array.from(priorStepsFromPreviousMeans),
+                Float64Array.from(priorStepsFromPreviousStdDevs),
+            );
+        } else {
+            probabilities = calculate_probabilities_with_board_constraints(
+                Uint8Array.from(hits),
+                Uint8Array.from(misses),
+                squids_gotten,
+                // No constraints for now.
+                Uint32Array.from([]),
+                Float64Array.from([]),
+            );
+        }
 
         if (probabilities !== undefined) {
             let maxY = 0;
@@ -673,10 +911,10 @@ class MainMap extends React.Component {
     }
 
     clearField() {
-        const newState = this.makeEmptyState();
-        newState.mode = this.state.mode;
-        newState.screenRecordingActive = this.state.screenRecordingActive;
-        newState.doVideoProcessing = this.state.doVideoProcessing;
+        const templateState = this.makeEmptyState();
+        const newState = {};
+        for (const name of ['squidLayout', 'grid', 'squidsGotten'])
+            newState[name] = templateState[name];
         this.setState(newState);
         this.doComputation(newState.grid, newState.squidsGotten);
     }
@@ -773,7 +1011,7 @@ class MainMap extends React.Component {
                 <option value="calculator">Calculator Mode</option>
                 <option value="practice">Practice Mode</option>
             </select><br />
-            {openingOptimizer && (!this.state.screenRecordingActive) && this.state.mode === 'calculator' && <>
+            {openingOptimizer && (!this.state.screenRecordingActive) && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
@@ -783,6 +1021,38 @@ class MainMap extends React.Component {
             {/* <button style={{ fontSize: '150%' }} onClick={() => { this.readBoardState(); }}>Do Computation</button><br /> */}
             <br/>
             <hr/>
+            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...<br/></div>}
+            {this.state.turboBlurboMode === true && <>
+                <div>
+                    {this.layoutDrawingBoardRefs.map((ref, i) =>
+                        <LayoutDrawingBoard parent={this} ref={ref} key={i}/>
+                    )}
+                </div>
+                <div style={{color: 'white', fontSize: '130%'}}>
+                    {/*
+                    First board mean:   <NumericInput style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onInput={num => this.setState({firstBoardStepsThousands: num})}/> &nbsp;
+                    First board stddev: <NumericInput style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onInput={num => this.setState({firstBoardStepsThousandsStdDev: num})}/> &nbsp;
+                    Next board mean:    <NumericInput style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onInput={num => this.setState({nextBoardStepsThousands: num})}/> &nbsp;
+                    Next board stddev:  <NumericInput style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onInput={num => this.setState({nextBoardStepsThousandsStdDev: num})}/>
+                    */}
+                    Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps):<br/>
+                    First board mean:   <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onInput={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
+                    First board stddev: <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onInput={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Next board mean:    <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onInput={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
+                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onInput={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
+                </div>
+                <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '1px solid white', width: '400px', minHeight: '20px', display: 'inline-block'}}>
+                    {this.state.potentialMatches.map((m, i) => <div key={i}>
+                        Potential match:{m.map((x, i) => <span key={i}> {x}</span>)}
+                    </div>)}
+                </div>
+                <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.<br/></div>
+            </>}
+            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                this.initializeTurboBlurboMode();
+            }}>Initialize Turbo Blurbo Mode</button><br/>
+
+            {/*
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
                 this.startScreenRecording();
             }}>Start Screen Cap</button>
@@ -796,7 +1066,6 @@ class MainMap extends React.Component {
 
             <video style={{display: 'none'}} ref={this.videoRef}>Video stream not available.</video>
             <canvas style={{display: 'none'}} ref={this.canvasRef} id="cv_canvasRef"></canvas>
-            {/* <canvas ref={this.referenceCanvasRef} id="cv_referenceCanvasRef"></canvas> */}
             <div style={{display: 'inline-block'}}>
                 <div style={{
                     display: 'inline-block',
@@ -810,7 +1079,9 @@ class MainMap extends React.Component {
                 </div>
             </div>
             <br/>
-            <span style={{ color: 'white' }}>Last CV time: {this.state.lastCVTime}ms - Last recompute time: {this.state.lastComputationTime}ms</span>
+            */}
+            {/* <span style={{ color: 'white' }}>Last CV time: {this.state.lastCVTime}ms - Last recompute time: {this.state.lastComputationTime}ms</span> */}
+            <span style={{ color: 'white' }}>Last recompute time: {this.state.lastComputationTime}ms</span>
             <div style={{display: 'none'}} ref={this.hiddenAreaRef}></div>
         </div>;
     }
@@ -850,7 +1121,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.2)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.3)</span>
         </div>;
     }
 }

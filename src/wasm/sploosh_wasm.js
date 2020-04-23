@@ -18,12 +18,19 @@ function passArray8ToWasm0(arg, malloc) {
     return ptr;
 }
 
-let cachegetInt32Memory0 = null;
-function getInt32Memory0() {
-    if (cachegetInt32Memory0 === null || cachegetInt32Memory0.buffer !== wasm.memory.buffer) {
-        cachegetInt32Memory0 = new Int32Array(wasm.memory.buffer);
+let cachegetUint32Memory0 = null;
+function getUint32Memory0() {
+    if (cachegetUint32Memory0 === null || cachegetUint32Memory0.buffer !== wasm.memory.buffer) {
+        cachegetUint32Memory0 = new Uint32Array(wasm.memory.buffer);
     }
-    return cachegetInt32Memory0;
+    return cachegetUint32Memory0;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4);
+    getUint32Memory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 let cachegetFloat64Memory0 = null;
@@ -34,31 +41,90 @@ function getFloat64Memory0() {
     return cachegetFloat64Memory0;
 }
 
+function passArrayF64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8);
+    getFloat64Memory0().set(arg, ptr / 8);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+let cachegetInt32Memory0 = null;
+function getInt32Memory0() {
+    if (cachegetInt32Memory0 === null || cachegetInt32Memory0.buffer !== wasm.memory.buffer) {
+        cachegetInt32Memory0 = new Int32Array(wasm.memory.buffer);
+    }
+    return cachegetInt32Memory0;
+}
+
 function getArrayF64FromWasm0(ptr, len) {
     return getFloat64Memory0().subarray(ptr / 8, ptr / 8 + len);
 }
 /**
-* Calculates the probabilities for each cell based on the hits, misses and the
-* squids that have already been killed.
 * @param {Uint8Array} hits
 * @param {Uint8Array} misses
 * @param {number} squids_gotten
+* @param {Uint32Array} board_constraints
+* @param {Float64Array} constraint_probs
 * @returns {Float64Array | undefined}
 */
-export function calculate_probabilities(hits, misses, squids_gotten) {
+export function calculate_probabilities_with_board_constraints(hits, misses, squids_gotten, board_constraints, constraint_probs) {
     var ptr0 = passArray8ToWasm0(hits, wasm.__wbindgen_malloc);
     var len0 = WASM_VECTOR_LEN;
     var ptr1 = passArray8ToWasm0(misses, wasm.__wbindgen_malloc);
     var len1 = WASM_VECTOR_LEN;
-    wasm.calculate_probabilities(8, ptr0, len0, ptr1, len1, squids_gotten);
+    var ptr2 = passArray32ToWasm0(board_constraints, wasm.__wbindgen_malloc);
+    var len2 = WASM_VECTOR_LEN;
+    var ptr3 = passArrayF64ToWasm0(constraint_probs, wasm.__wbindgen_malloc);
+    var len3 = WASM_VECTOR_LEN;
+    wasm.calculate_probabilities_with_board_constraints(8, ptr0, len0, ptr1, len1, squids_gotten, ptr2, len2, ptr3, len3);
     var r0 = getInt32Memory0()[8 / 4 + 0];
     var r1 = getInt32Memory0()[8 / 4 + 1];
-    let v2;
+    let v4;
     if (r0 !== 0) {
-        v2 = getArrayF64FromWasm0(r0, r1).slice();
+        v4 = getArrayF64FromWasm0(r0, r1).slice();
         wasm.__wbindgen_free(r0, r1 * 8);
     }
-    return v2;
+    return v4;
+}
+
+/**
+* @param {Uint8Array} hits
+* @param {Uint8Array} misses
+* @param {number} squids_gotten
+* @param {Uint32Array} observed_boards
+* @param {Uint32Array} prior_steps_from_previous_means
+* @param {Float64Array} prior_steps_from_previous_stddevs
+* @returns {Float64Array | undefined}
+*/
+export function calculate_probabilities_from_game_history(hits, misses, squids_gotten, observed_boards, prior_steps_from_previous_means, prior_steps_from_previous_stddevs) {
+    var ptr0 = passArray8ToWasm0(hits, wasm.__wbindgen_malloc);
+    var len0 = WASM_VECTOR_LEN;
+    var ptr1 = passArray8ToWasm0(misses, wasm.__wbindgen_malloc);
+    var len1 = WASM_VECTOR_LEN;
+    var ptr2 = passArray32ToWasm0(observed_boards, wasm.__wbindgen_malloc);
+    var len2 = WASM_VECTOR_LEN;
+    var ptr3 = passArray32ToWasm0(prior_steps_from_previous_means, wasm.__wbindgen_malloc);
+    var len3 = WASM_VECTOR_LEN;
+    var ptr4 = passArrayF64ToWasm0(prior_steps_from_previous_stddevs, wasm.__wbindgen_malloc);
+    var len4 = WASM_VECTOR_LEN;
+    wasm.calculate_probabilities_from_game_history(8, ptr0, len0, ptr1, len1, squids_gotten, ptr2, len2, ptr3, len3, ptr4, len4);
+    var r0 = getInt32Memory0()[8 / 4 + 0];
+    var r1 = getInt32Memory0()[8 / 4 + 1];
+    let v5;
+    if (r0 !== 0) {
+        v5 = getArrayF64FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_free(r0, r1 * 8);
+    }
+    return v5;
+}
+
+/**
+* @param {Uint32Array} board_table
+*/
+export function set_board_table(board_table) {
+    var ptr0 = passArray32ToWasm0(board_table, wasm.__wbindgen_malloc);
+    var len0 = WASM_VECTOR_LEN;
+    wasm.set_board_table(ptr0, len0);
 }
 
 async function load(module, imports) {
@@ -95,9 +161,9 @@ async function load(module, imports) {
 }
 
 async function init(input) {
-    // if (typeof input === 'undefined') {
-    //     input = import.meta.url.replace(/\.js$/, '_bg.wasm');
-    // }
+    //if (typeof input === 'undefined') {
+    //    input = import.meta.url.replace(/\.js$/, '_bg.wasm');
+    //}
     const imports = {};
 
 
