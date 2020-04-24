@@ -312,7 +312,7 @@ Want to discuss this tool further in depth? Join the [Linkus7 Discord](https://d
 
 This is incomplete and just a random listing of those that have contributed in the #sploosh-kaboom channel:
 
- - PeterSchmidtNielsen (TTV: FrobeniusEndomorphism) \[The GOAT\]
+ - PeterSchmidtNielsen (TTV: FrobeniusEndomorphism)
  - Cryze
  - ginkgo
  - TrogWW
