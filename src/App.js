@@ -25,7 +25,7 @@ class Tile extends React.Component {
         let backgroundColor = this.props.backgroundColor;
         if (backgroundColor === undefined) {
             backgroundColor = this.props.text === null ? colormap(this.props.prob) : (
-                this.props.text === 'HIT' ? '#a2a' : '#44a'
+                this.props.text === 'HIT' ? '#a2a' : 'rgba(0, 0, 0, 0)'
             );
         }
 
@@ -228,7 +228,7 @@ class LayoutDrawingBoard extends React.Component {
         const layoutString = this.getLayoutString();
         let boardIndex = this.props.parent.boardIndices[layoutString];
 
-        return <div style={{
+        return <div class="layoutdrawingboard" style={{
             margin: '20px',
             display: 'inline-block',
             color: 'white',
