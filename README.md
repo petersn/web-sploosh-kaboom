@@ -14,6 +14,9 @@
 - [Feedback](#feedback)
 - [Credits](#temporary-credit-page)
   
+
+# Sploosh Kaboom Solution Write-Up
+
 ## What is Sploosh Kaboom?
 
 Sploosh Kaboom is a minigame in Legend of Zelda: The Wind Waker similar to the 
@@ -24,7 +27,7 @@ or a SPLOOSH on a miss. The object of the game is to hit and elimate all ships
 within 24 shots. A ship is elimiated if all grid spaces it occupies are fired 
 upon. 
 
-## Why is Sploosh Kaboom Required for Wind Waker 100%? 
+### Why is Sploosh Kaboom Required for Wind Waker 100%? 
 
 The Wind Waker 100% rules dictate that all Treasure Charts and Heart Pieces 
 must be collected. Sploosh Kaboom grants a Piece of Heart on Link's first win
@@ -44,7 +47,7 @@ in a time senitive context like a speedrun?
 ### Examining the Statistics
 
 Sploosh Kaboom play can be optimized by examining the statistical odds of ship
-positioning on the board. By generating every possible valid ship configuration,
+positioning on the board. By generating every possible valid ship configuration
 we can perform statistically optimal play by use of a simple alogorithm:
 
 1. Generate every possible board configuration that results in a valid ship
@@ -57,9 +60,9 @@ ship.
 4. Based on the current game state (hits, misses, unchecked spaces, eliminated 
 ship count), determine what subset of the board working set is consistent with 
 the game state. This subset is the new board working set.
-5. Repeat from step (2) until the game is complete.
+5. repeat from step (2) until the game is complete
 
-This statistics-based algorithm can be further refined by optimizing opening 
+This statiscs based algorithm can be further refined by optimizing opening 
 patterns to quickly find ships and elimiate board possibilities. This algorithm 
 makes the most-likely choice at each step of the game, which won't necessarily
 make the best moves overall. However, it is known from analysis of Battleship that
@@ -67,7 +70,7 @@ this type of algorithm is close to optimal.
 
 ### Examining the Code
 
-In order to exactly understand Sploosh Kaboom, it is necessary to examine the 
+In order to exactly understand Sploosh Kaboom it is necessary to examine the 
 code used to generate boards. This code can be obtained from the Wind Waker
 game binary by Reverse Engineering techniques. We can determine the section of
 code dedicated to the generation of Sploosh Kaboom boards by examining memory 
@@ -81,55 +84,53 @@ follows:
 
 #### Board generation Algorithm
 
-```C
+```c
+board = [8×8 integer grid]      // board[i][j] means the value at col i, row j
 
-void setup_sk_board(struct SKStruct* sk_struct, int ship_count)
-{
-    // blank out the Sploosh Kaboom board
-    zero_sk_board(sk_struct);
+function generate():  // generates a board layout
+    // empty the board
+    for y from 0 to 8:
+        for x from 0 to 8:
+            board[y][x] = 0
 
-    if(ship_count == 2)
-    {
-        place_sk_ship(sk_struct, 0, 2);
-        place_sk_ship(sk_struct, 1, 3);
-    }
-    ...
-    else if(ship_count < 4)
-    {
-        // this is the configuratino actually used in the game
-        place_sk_ship(sk_struct, 0, 2);
-        place_sk_ship(sk_struct, 1, 3);
-        place_sk_ship(sk_struct, 2, 4);
-    }
-}
+    // place the ships
+    place(0,2)  // first #0 of length 2
+    place(1,3)  // then #1 of length 3
+    place(2,4)  // then #2 of length 4
 
-void place_sk_ship(struct SKStruct* sk_struct, int ship_idx, int ship_length)
-{
-    bool is_empty = true;
-    int orientation, x, y;
+function place(shipNumber, shipLength):  // places a single ship on the board
+    // generate ships until one fits
+    // rng() gives a uniformly "random" decimal 0 ≤ x < 1, increments the rng state
+    infinite loop:
+        orientation = floor(rng() * 1000) % 2 // vert. or horiz., 0 or 1, equally-likely
+        x = floor(rng() * 8)            // top/left squid's col, 0–7, equally-likely
+        y = floor(rng() * 8)            // top/left squid's row
+        if fits(x,y,shipLength,orientation):
+            exit loop                   // we've now determined x, y and orientation
 
-    do
-    {
-      // keep trying random orientations and
-      // x/y pos until ship fits on board
-      // RNG_func() returns a double in the domain [0, 1)
-      orientation = (int)(RNG_func() * 2.0);
-      x = (int)(RNG_func() * 8.0);
-      y = (int)(RNG_func() * 8.0);
-      // check if proposed ship fits on board and spaces aren't 
-      // occupied
-      is_empty = check_sk_ship_fits(sk_struct, orientation, x, y, ship_length);
-    } while(isEmpty);
+    // place ship
+    if orientation == 0:
+        for j from 0 to shipLength:             // for each squid
+            board[x][y+j] = 102 + shipNumber    // put 102/103/104 in relevant tile
+    else:
+        for i from 0 to shipLength:
+            board[x+i][y] = 102 + index
 
-    if(orientation)
-    {
-        //place ship veritcally
-    }
-    else
-    {
-        //place ship horizontally
-    }
-}
+function fits(x, y, shipLength, orientation):  // would the ship fit?
+    if orientation == 0:
+        for j from 0 to shipLength:     // for each tile
+            if x > 7 or y+j > 7:        // is it out-of-bounds?
+                return False
+            if board[x][y+j] > 100:     // does it already have a squid in it?
+                return False
+        return True                     // we've checked every tile by now
+    else:
+        for i from 0 to shipLength:
+            if x+i > 7 or y > 7:
+                return False
+            if board[x+i][y] > 100:
+                return False
+        return True
 
 ```
 
@@ -142,6 +143,8 @@ follows:
 
 ``` C
 
+double s1 = 100.0, s2 = 100.0, s3 = 100.0;
+
 double iterate_rng(double& s1, double& s2, double& s3)
 {
     s1 = mod(171 * s1, 30269);
@@ -150,6 +153,11 @@ double iterate_rng(double& s1, double& s2, double& s3)
 
     return mod(s1/30269.0 + s2/30307.0 + s3/30323.0, 1);
 }
+
+double rng()
+{
+    return iterate_rng(s1, s2, s3)
+}
 ```
 
 This generator makes use of three linear congruental generators that are then 
@@ -157,7 +165,22 @@ combined to produce a distribution between zero and one. This generator is
 initialized on console reboot to `s1 = s2 = s3 = 100`, a fixed initial seed.
 The values of `(s1, s2, s3)` at any given time determine what the next value
 of the random number generator will be. We can call this the "state" of the 
-random number generator. 
+random number generator. Each iteration of the RNG will advance the seed values
+and generate a new random return value. The first few steps of this process 
+can be seen below:
+
+| s1         | s2         | s3         | return value        | 
+|  ----:     |  ----:     |  ---:      |  ---:               |
+|      100.0 |      100.0 |      100.0 |  0.6930906199656834 |
+|    17100.0 |    17200.0 |    17000.0 |  0.5253911237999249 |
+|    18276.0 |    18621.0 |     9315.0 |  0.1491021216452075 |
+|     7489.0 |    20577.0 |     6754.0 |  0.9526796411193339 |
+|     9321.0 |    23632.0 |    26229.0 |  0.8229855100670485 |
+|    19903.0 |     3566.0 |     1449.0 |  0.8003992983171554 |
+|    ...     |     ...    |     ...    |  ...                |
+
+We can then use the board generation algorithm above to generate a mapping of RNG 
+states to the board it would generate in the game. 
 
 ### Solving the Game
 
@@ -261,7 +284,7 @@ in step (5).
 
 10. For the third game we now have an extremely small number of possible boards, so the 
 statistical method detailed above will be able to predict where the squids are with very high
-accuracy. 
+accuracy.
 
 ## Running the program
 
@@ -318,6 +341,7 @@ This is incomplete and just a random listing of those that have contributed in t
  - TrogWW
  - Langufo
  - csunday95
+ - shoutplenty
  - the NSA for the beautiful piece of software called Ghidra
  - aldelaro for Dolphin Memory Engine
  - the inimitable Dolphin Devs 
