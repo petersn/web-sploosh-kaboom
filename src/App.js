@@ -202,10 +202,46 @@ class LayoutDrawingBoard extends React.Component {
         for (let y = 0; y < 8; y++)
             for (let x = 0; x < 8; x++)
                 grid[[x, y]] = '.';
-        this.state = { grid };
+        this.state = { grid, selectedCell: null };
     }
 
     onClick(x, y) {
+        if (this.state.selectedCell === null) {
+            this.setState({ selectedCell: [x, y] });
+            return;
+        }
+        const grid = {...this.state.grid};
+        let changeMade = false;
+        for (const length of [2, 3, 4]) {
+            for (const [dx, dy] of [[+1, 0], [0, +1], [-1, 0], [0, -1]]) {
+                if (this.state.selectedCell[0] === x + dx * (length - 1) && this.state.selectedCell[1] === y + dy * (length - 1)) {
+                    // If this squid appears anywhere else, obliterate it.
+                    for (let y = 0; y < 8; y++)
+                        for (let x = 0; x < 8; x++)
+                            if (grid[[x, y]] === '' + length)
+                                grid[[x, y]] = '.';
+                    // Fill in the squid here.
+                    for (let i = 0; i < length; i++)
+                        grid[[x + i * dx, y + i * dy]] = '' + length;
+                    changeMade = true;
+                }
+            }
+        }
+        // If any squid has the wrong count, then totally eliminate it.
+        const countsBySquid = {2: 0, 3: 0, 4: 0, '.': 0};
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
+                countsBySquid[grid[[x, y]]]++;
+        for (const length of [2, 3, 4])
+            if (countsBySquid[length] !== length)
+                for (let y = 0; y < 8; y++)
+                    for (let x = 0; x < 8; x++)
+                        if (grid[[x, y]] === '' + length)
+                            grid[[x, y]] = '.';
+        if (changeMade)
+            this.setState({ grid });
+        this.setState({ selectedCell: null });
+        /*
         const grid = {...this.state.grid};
         switch (grid[[x, y]]) {
             case '.': grid[[x, y]] = '2'; break;
@@ -214,6 +250,7 @@ class LayoutDrawingBoard extends React.Component {
             case '4': grid[[x, y]] = '.'; break;
         }
         this.setState({ grid });
+        */
     }
 
     getLayoutString() {
@@ -227,29 +264,37 @@ class LayoutDrawingBoard extends React.Component {
     render() {
         const layoutString = this.getLayoutString();
         let boardIndex = this.props.parent.boardIndices[layoutString];
+        const isSelectedCell = (x, y) => this.state.selectedCell !== null && x === this.state.selectedCell[0] && y === this.state.selectedCell[1];
 
         return <div style={{
             margin: '20px',
             display: 'inline-block',
             color: 'white',
         }}>
-            {naturalsUpTo(8).map(
-                (y) => <div key={y} style={{
-                    display: 'flex',
-                }}>
-                    {naturalsUpTo(8).map(
-                        (x) => <Tile
-                            key={x + ',' + y}
-                            x={x} y={y}
-                            onClick={() => this.onClick(x, y)}
-                            text={this.state.grid[[x, y]]}
-                            valid={true}
-                            best={false}
-                            fontSize={'200%'}
-                        />
-                    )}
-                </div>
-            )}<br/>
+            <div style={{
+                backgroundImage: 'url("' + process.env.PUBLIC_URL + '/board_background_square.png")',
+                backgroundSize: '100% 100%',
+                padding: '18px',
+            }}>
+                {naturalsUpTo(8).map(
+                    (y) => <div key={y} style={{
+                        display: 'flex',
+                    }}>
+                        {naturalsUpTo(8).map(
+                            (x) => <Tile
+                                key={x + ',' + y}
+                                x={x} y={y}
+                                onClick={() => this.onClick(x, y)}
+                                text={this.state.grid[[x, y]]}
+                                valid={true}
+                                best={this.state.selectedCell}
+                                fontSize={'200%'}
+                                opacity={isSelectedCell(x, y) || this.state.grid[[x, y]] !== '.' ? 0.6 : 0.2}
+                            />
+                        )}
+                    </div>
+                )}
+            </div><br/>
             Squid Layout: {boardIndex}
         </div>;
     }
@@ -1125,7 +1170,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.4)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.5)</span>
         </div>;
     }
 }
