@@ -1,13 +1,14 @@
 import React from 'react';
 import './App.css';
-import $ from 'jquery';
+//import $ from 'jquery';
 import init, {
     set_board_table,
     calculate_probabilities_with_board_constraints,
     calculate_probabilities_from_game_history,
+    disambiguate_final_board,
 } from './wasm/sploosh_wasm.js';
-import { findAllByPlaceholderText } from '@testing-library/react';
-import NumericInput from 'react-numeric-input';
+//import { findAllByPlaceholderText } from '@testing-library/react';
+//import NumericInput from 'react-numeric-input';
 const interpolate = require('color-interpolate');
 
 
@@ -20,7 +21,7 @@ const naturalsUpTo = (n) => [...Array(n).keys()];
 
 class Tile extends React.Component {
     render() {
-        const isBest = this.props.best !== null && this.props.best[0] == this.props.x && this.props.best[1] == this.props.y;
+        const isBest = this.props.best !== null && this.props.best[0] === this.props.x && this.props.best[1] === this.props.y;
 
         let backgroundColor = this.props.backgroundColor;
         if (backgroundColor === undefined) {
@@ -191,18 +192,25 @@ function generateLayout() {
             }
         }
     }
-    console.log('Generated:', layout);
     return layout;
 }
 
 class LayoutDrawingBoard extends React.Component {
     constructor() {
         super();
+        this.state = { grid: this.makeEmptyGrid(), selectedCell: null };
+    }
+
+    makeEmptyGrid() {
         const grid = [];
         for (let y = 0; y < 8; y++)
             for (let x = 0; x < 8; x++)
                 grid[[x, y]] = '.';
-        this.state = { grid, selectedCell: null };
+        return grid;
+    }
+
+    clearBoard() {
+        this.setState({ grid: this.makeEmptyGrid(), selectedCell: null });
     }
 
     onClick(x, y) {
@@ -241,24 +249,23 @@ class LayoutDrawingBoard extends React.Component {
         if (changeMade)
             this.setState({ grid });
         this.setState({ selectedCell: null });
-        /*
-        const grid = {...this.state.grid};
-        switch (grid[[x, y]]) {
-            case '.': grid[[x, y]] = '2'; break;
-            case '2': grid[[x, y]] = '3'; break;
-            case '3': grid[[x, y]] = '4'; break;
-            case '4': grid[[x, y]] = '.'; break;
-        }
-        this.setState({ grid });
-        */
     }
 
     getLayoutString() {
+        // Quadratic time, but who cares?
         let layoutString = '';
         for (let y = 0; y < 8; y++)
             for (let x = 0; x < 8; x++)
                 layoutString += this.state.grid[[x, y]];
         return layoutString;
+    }
+
+    setStateFromLayoutString(layoutString) {
+        const grid = [];
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
+                grid[[x, y]] = layoutString[x + 8 * y];
+        this.setState({grid});
     }
 
     render() {
@@ -290,6 +297,7 @@ class LayoutDrawingBoard extends React.Component {
                                 best={this.state.selectedCell}
                                 fontSize={'200%'}
                                 opacity={isSelectedCell(x, y) || this.state.grid[[x, y]] !== '.' ? 0.6 : 0.2}
+                                backgroundColor={this.state.grid[[x, y]] === '.' ? undefined : 'green'}
                             />
                         )}
                     </div>
@@ -312,7 +320,6 @@ class MainMap extends React.Component {
         super();
         this.state = this.makeEmptyState();
         this.bannerCache = new Map();
-        this.doComputation(this.state.grid, this.state.squidsGotten);
         window.RECOMP = () => {
             this.bannerCache = new Map();
             this.getBoardRegistrationAndScale();
@@ -321,8 +328,10 @@ class MainMap extends React.Component {
         this.previouslyReadStates = [null, null, null];
     }
 
+
     componentDidMount() {
         this.makeReferenceImageCanvases();
+        this.doComputation(this.state.grid, this.state.squidsGotten);
         //setTimeout(() => this.getScreenRecording(), 1000);
     }
 
@@ -338,7 +347,6 @@ class MainMap extends React.Component {
             const newImage = document.createElement('img');
             newImage.src = process.env.PUBLIC_URL + '/images/' + name + '.png';
             newImage.onload = function() {
-                console.log("Width:", this.width, this.height, this);
                 newCanvas.width = this.width;
                 newCanvas.height = this.height;
                 const ctx = newCanvas.getContext('2d');
@@ -348,21 +356,25 @@ class MainMap extends React.Component {
         }
     }
 
-    makeEmptyState() {
+    makeEmptyGrid() {
         const grid = [];
-        const probs = [];
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
                 grid[[x, y]] = null;
+        return grid;
+    }
+
+    makeEmptyState() {
+        const probs = [];
+        for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++)
                 probs[[x, y]] = 0.0;
-            }
-        }
         // Select a particular layout, for practice mode.
         const squidLayout = generateLayout();
         return {
             mode: 'calculator',
             squidLayout,
-            grid,
+            grid: this.makeEmptyGrid(),
             squidsGotten: 'unknown',
             probs,
             best: [3, 3],
@@ -375,10 +387,10 @@ class MainMap extends React.Component {
             turboBlurboMode: false,
 
             potentialMatches: [],
-            firstBoardStepsThousands: 100,
-            firstBoardStepsThousandsStdDev: 100,
-            nextBoardStepsThousands: 3,
-            nextBoardStepsThousandsStdDev: 1,
+            firstBoardStepsThousands: 500,
+            firstBoardStepsThousandsStdDev: 500,
+            nextBoardStepsThousands: 7,
+            nextBoardStepsThousandsStdDev: 3,
         };
     }
 
@@ -422,6 +434,10 @@ class MainMap extends React.Component {
             return;
         this.setState({turboBlurboMode: 'initializing'});
         this.boardIndices = makeBoardIndicesTable();
+        this.boardIndexToLayoutString = new Array(Object.keys(this.boardIndices).length);
+        for (const key of Object.keys(this.boardIndices))
+            this.boardIndexToLayoutString[this.boardIndices[key]] = key;
+
         const req = new XMLHttpRequest();
         const tableName = bigTable ? '/board_table_25M.bin' : '/board_table_5M.bin';
         req.open('GET', process.env.PUBLIC_URL + tableName, true);
@@ -435,7 +451,7 @@ class MainMap extends React.Component {
                 if (v > 604583)
                     alert('BUG BUG BUG: Bad value in board table: ' + v);
             set_board_table(this.boardTable);
-            this.setState({turboBlurboMode: true});
+            this.setState({turboBlurboMode: true, squidsGotten: '0'});
         };
         req.send();
     }
@@ -467,7 +483,7 @@ class MainMap extends React.Component {
             this.boardFitParams = await this.performGridSearch(
                 bestGuessScale * (1 - searchMargin),
                 bestGuessScale * (1 + 2 * searchMargin),
-                i == 0 ? 20 : (i == 1 ? 10 : 4),
+                i === 0 ? 20 : (i === 1 ? 10 : 4),
             );
             bestGuessScale = this.boardFitParams.scale;
             searchMargin /= 2;
@@ -672,10 +688,10 @@ class MainMap extends React.Component {
                 const downRight  = getPixelColor(centerX + D,    centerY + D);
                 const probablyInsideCursor = x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y;
                 // This variable says if we think our left side is likely corrupted by the cursor's halo.
-                const cursorHaloLeft  = probablyInsideCursor || x === mostLikelyCursorLocation.x + 1 && y === mostLikelyCursorLocation.y;
-                const cursorHaloRight = probablyInsideCursor || x === mostLikelyCursorLocation.x - 1 && y === mostLikelyCursorLocation.y;
-                const cursorHaloUp    = probablyInsideCursor || x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y + 1;
-                const cursorHaloDown  = probablyInsideCursor || x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y - 1;
+                const cursorHaloLeft  = probablyInsideCursor || (x === mostLikelyCursorLocation.x + 1 && y === mostLikelyCursorLocation.y);
+                const cursorHaloRight = probablyInsideCursor || (x === mostLikelyCursorLocation.x - 1 && y === mostLikelyCursorLocation.y);
+                const cursorHaloUp    = probablyInsideCursor || (x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y + 1);
+                const cursorHaloDown  = probablyInsideCursor || (x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y - 1);
                 const cursorHaloUL = cursorHaloUp   || cursorHaloLeft;
                 const cursorHaloUR = cursorHaloUp   || cursorHaloRight;
                 const cursorHaloDL = cursorHaloDown || cursorHaloLeft;
@@ -807,8 +823,45 @@ class MainMap extends React.Component {
                     yield [i, ...subResult];
     }
 
-    async doComputation(grid, squidsGotten) {
-        const t0 = performance.now();
+    makeGameHistoryArguments() {
+        // Figure out how many history boards we have.
+        const rawObservedBoards = this.layoutDrawingBoardRefs
+            .map((ref) => this.boardIndices[ref.current.getLayoutString()]);
+        const observedBoards = [];
+        for (const ob of rawObservedBoards) {
+            if (ob === undefined)
+                break;
+            observedBoards.push(ob);
+        }
+
+        const matches = [];
+        for (const match of this.findMatchingLocations(observedBoards, 0, 1000000))
+            matches.push(match);
+        this.setState({potentialMatches: matches});
+
+        const priorStepsFromPreviousMeans = [];
+        const priorStepsFromPreviousStdDevs = [];
+        let first = true;
+        for (const index of [...observedBoards, null]) {
+            if (index === undefined)
+                break;
+            if (first) {
+                priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.firstBoardStepsThousands));
+                priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
+            } else {
+                priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
+                priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.nextBoardStepsThousandsStdDev));
+            }
+            first = false;
+        }
+        return [
+            Uint32Array.from(observedBoards),
+            Uint32Array.from(priorStepsFromPreviousMeans),
+            Float64Array.from(priorStepsFromPreviousStdDevs),
+        ];
+    }
+
+    getGridStatistics(grid, squidsGotten) {
         const hits = [];
         const misses = [];
         for (let y = 0; y < 8; y++) {
@@ -820,63 +873,33 @@ class MainMap extends React.Component {
                     misses.push(8 * y + x);
             }
         }
-        let squids_gotten = -1;
-        for (const n of ['0', '1', '2'])
+        let numericSquidsGotten = -1;
+        for (const n of ['0', '1', '2', '3'])
             if (squidsGotten === n || squidsGotten === Number(n))
-                squids_gotten = Number(n);
+                numericSquidsGotten = Number(n);
+        return {hits, misses, numericSquidsGotten};
+    }
+
+    async doComputation(grid, squidsGotten) {
+        const t0 = performance.now();
+        const {hits, misses, numericSquidsGotten} = this.getGridStatistics(grid, squidsGotten);
 
         await wasm;
-
         let probabilities;
-
         if (this.state.turboBlurboMode) {
-            // Figure out how many history boards we have.
-            const rawObservedBoards = this.layoutDrawingBoardRefs
-                .map((ref) => this.boardIndices[ref.current.getLayoutString()]);
-            const observedBoards = [];
-            for (const ob of rawObservedBoards) {
-                if (ob === undefined)
-                    break;
-                observedBoards.push(ob);
-            }
-            console.log('observedBoards:', observedBoards);
-
-            const matches = [];
-            for (const match of this.findMatchingLocations(observedBoards, 0, 1000000))
-                matches.push(match);
-            this.setState({potentialMatches: matches});
-
-            const priorStepsFromPreviousMeans = [];
-            const priorStepsFromPreviousStdDevs = [];
-            let first = true;
-            for (const index of [...observedBoards, null]) {
-                if (index === undefined)
-                    break;
-                if (first) {
-                    priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.firstBoardStepsThousands));
-                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
-                } else {
-                    priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
-                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.nextBoardStepsThousandsStdDev));
-                }
-                first = false;
-            }
-
-            console.log('Turbo:', observedBoards, priorStepsFromPreviousMeans, priorStepsFromPreviousStdDevs);
+            const gameHistoryArguments = this.makeGameHistoryArguments();
 
             probabilities = calculate_probabilities_from_game_history(
                 Uint8Array.from(hits),
                 Uint8Array.from(misses),
-                squids_gotten,
-                Uint32Array.from(observedBoards),
-                Uint32Array.from(priorStepsFromPreviousMeans),
-                Float64Array.from(priorStepsFromPreviousStdDevs),
+                numericSquidsGotten,
+                ...gameHistoryArguments,
             );
         } else {
             probabilities = calculate_probabilities_with_board_constraints(
                 Uint8Array.from(hits),
                 Uint8Array.from(misses),
-                squids_gotten,
+                numericSquidsGotten,
                 // No constraints for now.
                 Uint32Array.from([]),
                 Float64Array.from([]),
@@ -901,12 +924,14 @@ class MainMap extends React.Component {
             }
             const observationProb = probabilities[64];
             this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid: true, observationProb });
+        } else {
+            this.setState({ valid: false });
         }
         const t1 = performance.now();
         this.setState({lastComputationTime: t1 - t0});
     }
 
-    onClick(x, y) {
+    onClick(x, y, setAsHit) {
         const grid = { ...this.state.grid };
         let gridValue = grid[[x, y]];
         let squidsGotten = this.state.squidsGotten;
@@ -914,7 +939,7 @@ class MainMap extends React.Component {
         if (this.state.mode === 'calculator') {
             switch (gridValue) {
                 case null:
-                    gridValue = 'MISS';
+                    gridValue = setAsHit ? 'HIT' : 'MISS';
                     break;
                 case 'MISS':
                     gridValue = 'HIT';
@@ -961,8 +986,72 @@ class MainMap extends React.Component {
         const newState = {};
         for (const name of ['squidLayout', 'grid', 'squidsGotten'])
             newState[name] = templateState[name];
+        // The squidsGotten value of 'unknown' is banned in turbo blurbo mode.
+        if (this.state.turboBlurboMode)
+            newState.squidsGotten = '0';
         this.setState(newState);
         this.doComputation(newState.grid, newState.squidsGotten);
+    }
+
+    reportMiss() {
+        if (this.state.best !== null && this.state.grid[this.state.best] === null)
+            this.onClick(...this.state.best);
+    }
+
+    reportHit() {
+        if (this.state.best !== null && this.state.grid[this.state.best] === null)
+            this.onClick(...this.state.best, true);
+    }
+
+    async incrementKills() {
+        let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
+        let grid = this.state.grid;
+        numericValue++;
+        if (numericValue === 4) {
+            const success = await this.copyToHistory();
+            if (success) {
+                numericValue = 0;
+                grid = this.makeEmptyGrid();
+            } else {
+                numericValue = 3;
+            }
+        }
+        this.setState({grid, squidsGotten: '' + numericValue});
+        this.doComputation(grid, '' + numericValue);
+    }
+
+    async copyToHistory() {
+        const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
+        const gameHistoryArguments = this.makeGameHistoryArguments();
+        await wasm;
+        const finalBoard = disambiguate_final_board(
+            Uint8Array.from(hits),
+            ...gameHistoryArguments,
+        );
+        if (finalBoard === undefined) {
+            // TODO: Show a proper error message in this case!
+            //alert('Ambiguous!');
+            return false;
+        }
+        console.log('Final board:', finalBoard);
+        const layoutString = this.boardIndexToLayoutString[finalBoard];
+        const observedBoards = gameHistoryArguments[0];
+        let fillIndex = observedBoards.length;
+        // If we're already at capacity then we have to shift the boards over.
+        if (fillIndex === this.layoutDrawingBoardRefs.length) {
+            this.shiftHistory();
+            fillIndex--;
+        }
+        this.layoutDrawingBoardRefs[fillIndex].current.setStateFromLayoutString(layoutString);
+        return true;
+    }
+
+    shiftHistory() {
+        const drawingBoards = this.layoutDrawingBoardRefs.map((ref) => ref.current);
+        for (let i = 0; i < drawingBoards.length -1; i++) {
+            drawingBoards[i].setState(drawingBoards[i + 1].state);
+        }
+        drawingBoards[drawingBoards.length - 1].clearBoard();
     }
 
     renderActualMap(overlayMode) {
@@ -1022,7 +1111,7 @@ class MainMap extends React.Component {
         }}>
             <span style={{ fontSize: '150%', color: 'white' }}>Shots used: {usedShots}</span><br />
             {this.state.doVideoProcessing || this.renderActualMap(false)}
-            {this.state.valid || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
+            {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
                 <span style={{ color: 'white' }}>Number of squids killed:</span>
@@ -1034,7 +1123,11 @@ class MainMap extends React.Component {
                         this.doComputation(this.state.grid, event.target.value);
                     }}
                 >
-                    <option value="unknown">Unknown</option>
+                    {/* In turbo blurbo mode don't allow unknown, because it's just an accident waiting to happen for a runner. */}
+                    {
+                        this.state.turboBlurboMode ||
+                        <option value="unknown">Unknown</option>
+                    }
                     <option value="0">0</option>
                     <option value="1">1</option>
                     <option value="2">2</option>
@@ -1048,6 +1141,16 @@ class MainMap extends React.Component {
                 */}
             </div>
             <br />
+            {
+                this.state.turboBlurboMode &&
+                <>
+                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
+                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
+                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.copyToHistory(); }}>Copy to History (h)</button>
+                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
+                </>
+            }
+            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (k)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
             <select
                 style={{ marginLeft: '20px', fontSize: '150%' }}
@@ -1082,10 +1185,10 @@ class MainMap extends React.Component {
                     Next board stddev:  <NumericInput style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onInput={num => this.setState({nextBoardStepsThousandsStdDev: num})}/>
                     */}
                     Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps):<br/>
-                    First board mean:   <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onInput={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
-                    First board stddev: <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onInput={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Next board mean:    <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onInput={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
-                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onInput={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
+                    First board mean:   <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
+                    First board stddev: <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Next board mean:    <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
+                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
                 </div>
                 <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '1px solid white', width: '400px', minHeight: '20px', display: 'inline-block'}}>
                     {this.state.potentialMatches.map((m, i) => <div key={i}>
@@ -1139,6 +1242,15 @@ class MainMap extends React.Component {
 function globalShortcutsHandler(evt) {
     if (evt.key === 'p' && globalMap !== null)
         globalMap.toggleVideoProcessing();
+
+    if (evt.key === 'z' && globalMap !== null)
+        globalMap.reportMiss();
+    if (evt.key === 'x' && globalMap !== null)
+        globalMap.reportHit();
+    if (evt.key === 'k' && globalMap !== null)
+        globalMap.incrementKills();
+    if (evt.key === 'h' && globalMap !== null)
+        globalMap.copyToHistory();
 }
 
 document.addEventListener('keydown', globalShortcutsHandler);
@@ -1170,7 +1282,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.5)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.6)</span>
         </div>;
     }
 }

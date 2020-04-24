@@ -119,6 +119,28 @@ export function calculate_probabilities_from_game_history(hits, misses, squids_g
 }
 
 /**
+* @param {Uint8Array} hits
+* @param {Uint32Array} observed_boards
+* @param {Uint32Array} prior_steps_from_previous_means
+* @param {Float64Array} prior_steps_from_previous_stddevs
+* @returns {number | undefined}
+*/
+export function disambiguate_final_board(hits, observed_boards, prior_steps_from_previous_means, prior_steps_from_previous_stddevs) {
+    var ptr0 = passArray8ToWasm0(hits, wasm.__wbindgen_malloc);
+    var len0 = WASM_VECTOR_LEN;
+    var ptr1 = passArray32ToWasm0(observed_boards, wasm.__wbindgen_malloc);
+    var len1 = WASM_VECTOR_LEN;
+    var ptr2 = passArray32ToWasm0(prior_steps_from_previous_means, wasm.__wbindgen_malloc);
+    var len2 = WASM_VECTOR_LEN;
+    var ptr3 = passArrayF64ToWasm0(prior_steps_from_previous_stddevs, wasm.__wbindgen_malloc);
+    var len3 = WASM_VECTOR_LEN;
+    wasm.disambiguate_final_board(8, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+    var r0 = getInt32Memory0()[8 / 4 + 0];
+    var r1 = getInt32Memory0()[8 / 4 + 1];
+    return r0 === 0 ? undefined : r1 >>> 0;
+}
+
+/**
 * @param {Uint32Array} board_table
 */
 export function set_board_table(board_table) {

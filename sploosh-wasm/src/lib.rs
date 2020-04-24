@@ -141,7 +141,7 @@ impl PossibleBoards {
         hits: &[u8],
         misses: &[u8],
         squids_gotten: i32,
-		board_priors: &[f64],
+        board_priors: &[f64],
     ) -> Option<([f64; 64], f64)> {
         let hit_mask = make_mask(hits);
         let miss_mask = make_mask(misses);
@@ -150,10 +150,10 @@ impl PossibleBoards {
         let mut probabilities = [0.0; 64];
 
         for (i, pb) in (&self.boards).iter().enumerate() {
-			let board_prob = board_priors[i] * pb.probability;
-			if board_prob == 0.0 {
-				continue;
-			}
+            let board_prob = board_priors[i] * pb.probability;
+            if board_prob == 0.0 {
+                continue;
+            }
             if pb.check_compatible(hit_mask, miss_mask, squids_gotten) {
                 for bit_index in 0..64 {
                     if (pb.squids & (1 << bit_index)) != 0 {
@@ -176,92 +176,126 @@ impl PossibleBoards {
         Some((probabilities, total_probability))
     }
 
+    pub fn compute_board_priors(
+        &self,
+        board_table: &[u32],
+        observed_boards: &[u32],
+        prior_steps_from_previous_means: &[u32],
+        prior_steps_from_previous_stddevs: &[f64],
+    ) -> Vec<f64> {
+        // We must compute the boards and their corresponding probabilities from our observations.
+        let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
+        for _ in 0..604584 {
+            board_priors.push(0.0);
+        }
+        fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
+            let z = x / sigma;
+            return (z * z / -2.0).exp();
+        }
+        fn scan_from(
+            depth: usize, starting_index: usize, prob: f64,
+            mut board_priors: &mut Vec<f64>, board_table: &[u32],
+            observed_boards: &[u32],
+            prior_steps_from_previous_means: &[u32],
+            prior_steps_from_previous_stddevs: &[f64],
+        ) {
+            let mu: i64 = prior_steps_from_previous_means[depth] as i64;
+            let sigma: f64 = prior_steps_from_previous_stddevs[depth];
+            let scan_limit: i64 = (5.0 * sigma) as i64;
+            let mean_index: i64 = starting_index as i64 + mu;
+            let lower_limit: usize = std::cmp::max(starting_index as i64 + 1, mean_index - scan_limit) as usize;
+            let upper_limit: usize = std::cmp::min(board_table.len() as i64, mean_index + scan_limit) as usize;
+            if depth == observed_boards.len() {
+                // Fill in our final smeared prior.
+                for i in lower_limit..upper_limit {
+                    let offset = i as i64 - (starting_index as i64 + mu);
+                    board_priors[board_table[i] as usize] += prob * gaussian_pdf(offset as f64, sigma);
+                }
+            } else {
+                for i in lower_limit..upper_limit {
+                    if board_table[i] == observed_boards[depth] {
+                        // Compute the normal prior, but ignore normalization, because that's handled at the end by do_computation anyway.
+                        let offset = i as i64 - (starting_index as i64 + mu);
+                        let adjustment = gaussian_pdf(offset as f64, sigma);
+                        scan_from(
+                            depth + 1, i, prob * adjustment,
+                            &mut board_priors, &board_table,
+                            &observed_boards,
+                            &prior_steps_from_previous_means,
+                            &prior_steps_from_previous_stddevs,
+                        );
+                    }
+                }
+            }
+        }
+        scan_from(
+            0, 0, 1.0,
+            &mut board_priors, &board_table,
+            &observed_boards,
+            &prior_steps_from_previous_means,
+            &prior_steps_from_previous_stddevs,
+        );
+        board_priors
+    }
+
     pub fn do_computation_from_game_history(
         &self,
-		board_table: &[u32],
+        board_table: &[u32],
         hits: &[u8],
         misses: &[u8],
         squids_gotten: i32,
-		observed_boards: &[u32],
-		prior_steps_from_previous_means: &[u32],
-		prior_steps_from_previous_stddevs: &[f64],
+        observed_boards: &[u32],
+        prior_steps_from_previous_means: &[u32],
+        prior_steps_from_previous_stddevs: &[f64],
     ) -> Option<([f64; 64], f64)> {
-		// We must compute the boards and their corresponding probabilities from our observations.
-		let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-		for _ in 0..604584 {
-			board_priors.push(0.0);
-		}
-		fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
-			let mut v = x / sigma;
-			return (v * v / -2.0).exp();
-		}
-		fn scan_from(
-			depth: usize, starting_index: usize, prob: f64,
-			mut board_priors: &mut Vec<f64>, board_table: &[u32],
-			observed_boards: &[u32],
-			prior_steps_from_previous_means: &[u32],
-			prior_steps_from_previous_stddevs: &[f64],
-		) {
-			let mu: i64 = prior_steps_from_previous_means[depth] as i64;
-			let sigma: f64 = prior_steps_from_previous_stddevs[depth];
-			let scan_limit: i64 = (5.0 * sigma) as i64;
-			let mean_index: i64 = starting_index as i64 + mu;
-			let lower_limit: usize = std::cmp::max(starting_index as i64 + 1, mean_index - scan_limit) as usize;
-			let upper_limit: usize = std::cmp::min(board_table.len() as i64, mean_index + scan_limit) as usize;
-			if depth == observed_boards.len() {
-				// Fill in our final smeared prior.
-				for i in lower_limit..upper_limit {
-					let offset = i as i64 - (starting_index as i64 + mu);
-					board_priors[board_table[i] as usize] += prob * gaussian_pdf(offset as f64, sigma);
-				}
-			} else {
-				for i in lower_limit..upper_limit {
-					if board_table[i] == observed_boards[depth] {
-						// Compute the normal prior, but ignore normalization, because that's handled at the end by do_computation anyway.
-						let offset = i as i64 - (starting_index as i64 + mu);
-						let adjustment = gaussian_pdf(offset as f64, sigma);
-						scan_from(
-							depth + 1, i, prob * adjustment,
-							&mut board_priors, &board_table,
-							&observed_boards,
-							&prior_steps_from_previous_means,
-							&prior_steps_from_previous_stddevs,
-						);
-//						scan_from(depth + 1, i, prob * adjustment, board_priors, board_table);
-					}
-				}
-			}
-		}
-		scan_from(
-			0, 0, 1.0,
-			&mut board_priors, &board_table,
-			&observed_boards,
-			&prior_steps_from_previous_means,
-			&prior_steps_from_previous_stddevs,
-		);
+        let board_priors: Vec<f64> = self.compute_board_priors(
+            board_table,
+            observed_boards,
+            prior_steps_from_previous_means,
+            prior_steps_from_previous_stddevs,
+        );
+        self.do_computation(hits, misses, squids_gotten, &board_priors)
+    }
 
-		//*
-		// Have some vanishing prior on every other possible board, just so we avoid giving up if we were wrong.
-		for i in 0..604584 {
-//			board_priors[i] = 0.0;
-			board_priors[i] += 1e-10;
-		}
-//		board_priors[prior_steps_from_previous_stddevs[0] as usize] = 1.0;
-		// */
-		/*
-		if board_table.len() > 1000 {
-			for i in 0..100 {
-				let index = board_table[i] as usize;
-				if index < board_priors.len() {
-					board_priors[board_table[i] as usize] += 1.0;
-				}
-//				board_priors[i] += 1.0;
-			}
-		}
-		*/
+    pub fn disambiguate_final_board(
+        &self,
+        board_table: &[u32],
+        hits: &[u8],
+        observed_boards: &[u32],
+        prior_steps_from_previous_means: &[u32],
+        prior_steps_from_previous_stddevs: &[f64],
+    ) -> Option<u32> {
+        let mut board_priors: Vec<f64> = self.compute_board_priors(
+            board_table,
+            observed_boards,
+            prior_steps_from_previous_means,
+            prior_steps_from_previous_stddevs,
+        );
 
-		self.do_computation(hits, misses, squids_gotten, &board_priors)
-	}
+        let hit_mask = make_mask(hits);
+        for (i, pb) in (&self.boards).iter().enumerate() {
+            if ! pb.check_compatible(hit_mask, 0, 3) {
+                board_priors[i] = 0.0;
+            }
+        }
+
+        // Normalize the prior.
+        let mut total = 1e-20;
+        for p in &board_priors {
+            total += *p;
+        }
+        for p in &mut board_priors {
+            *p /= total;
+        }
+
+        for (i, p) in board_priors.iter().enumerate() {
+            if *p > 0.9 {
+                return Some(i as u32);
+            }
+        }
+
+        None
+    }
 }
 
 static POSSIBLE_BOARDS: OnceCell<PossibleBoards> = OnceCell::new();
@@ -271,19 +305,19 @@ static BOARD_TABLE: OnceCell<Vec<u32>> = OnceCell::new();
 // squids that have already been killed.
 #[wasm_bindgen]
 pub fn calculate_probabilities_with_board_constraints(
-	hits: &[u8],
-	misses: &[u8],
-	squids_gotten: i32,
-	board_constraints: &[u32],
-	constraint_probs: &[f64],
+    hits: &[u8],
+    misses: &[u8],
+    squids_gotten: i32,
+    board_constraints: &[u32],
+    constraint_probs: &[f64],
 ) -> Option<Vec<f64>> {
-	let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-	for _ in 0..604584 {
-		board_priors.push(if board_constraints.len() == 0 { 1.0 } else { 0.0 });
-	}
-	for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
-		board_priors[*board_index as usize] = *prior_prob;
-	}
+    let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
+    for _ in 0..604584 {
+        board_priors.push(if board_constraints.len() == 0 { 1.0 } else { 0.0 });
+    }
+    for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
+        board_priors[*board_index as usize] = *prior_prob;
+    }
 
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
@@ -299,31 +333,30 @@ pub fn calculate_probabilities_with_board_constraints(
 
 #[wasm_bindgen]
 pub fn calculate_probabilities_from_game_history(
-	hits: &[u8],
-	misses: &[u8],
-	squids_gotten: i32,
-	observed_boards: &[u32],
-	prior_steps_from_previous_means: &[u32],
-	prior_steps_from_previous_stddevs: &[f64],
+    hits: &[u8],
+    misses: &[u8],
+    squids_gotten: i32,
+    observed_boards: &[u32],
+    prior_steps_from_previous_means: &[u32],
+    prior_steps_from_previous_stddevs: &[f64],
 ) -> Option<Vec<f64>> {
-	let fake_board_table = vec!{1, 2, 3, 4, 5, 6, 7, 9, 10};
-
-	let board_table = match BOARD_TABLE.get() {
-		Some(v) => v,
-		None => &fake_board_table,
-	};
+    let fake_board_table = vec!{};
+    let board_table = match BOARD_TABLE.get() {
+        Some(v) => v,
+        None => &fake_board_table,
+    };
 
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
         .do_computation_from_game_history(
-			board_table,
-			hits,
-			misses,
-			squids_gotten,
-			observed_boards,
-			prior_steps_from_previous_means,
-			prior_steps_from_previous_stddevs,
-		)?;
+            board_table,
+            hits,
+            misses,
+            squids_gotten,
+            observed_boards,
+            prior_steps_from_previous_means,
+            prior_steps_from_previous_stddevs,
+        )?;
 
     let mut values = probabilities.iter().copied().collect::<Vec<_>>();
 
@@ -334,8 +367,32 @@ pub fn calculate_probabilities_from_game_history(
 }
 
 #[wasm_bindgen]
+pub fn disambiguate_final_board(
+    hits: &[u8],
+    observed_boards: &[u32],
+    prior_steps_from_previous_means: &[u32],
+    prior_steps_from_previous_stddevs: &[f64],
+) -> Option<u32> {
+    let fake_board_table = vec!{};
+    let board_table = match BOARD_TABLE.get() {
+        Some(v) => v,
+        None => &fake_board_table,
+    };
+
+    POSSIBLE_BOARDS
+        .get_or_init(PossibleBoards::new)
+        .disambiguate_final_board(
+            board_table,
+            hits,
+            observed_boards,
+            prior_steps_from_previous_means,
+            prior_steps_from_previous_stddevs,
+        )
+}
+
+#[wasm_bindgen]
 pub fn set_board_table(board_table: &[u32]) -> () {
-	BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>());
+    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>());
 }
 
 #[cfg(test)]
