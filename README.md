@@ -132,32 +132,24 @@ function fits(x, y, shipLength, orientation):  // would the ship fit?
             if board[x+i][y] > 100:
                 return False
         return True
-
 ```
 
 The full reverse engineered code can be found [here](https://pastebin.com/010PBgnm). 
 
 #### RNG Algorithm
 
-Wind Waker makes use of the Wichmann–Hill PRNG, presented in pseudocode as 
+Wind Waker makes use of the Wichmann-Hill PRNG, presented in pseudocode as
 follows:
 
 ``` C
+double rng() {
+    static int s1 = 100, s2 = 100, s3 = 100;
 
-double s1 = 100.0, s2 = 100.0, s3 = 100.0;
+    s1 = (171 * s1) % 30269;
+    s2 = (172 * s2) % 30307;
+    s3 = (170 * s3) % 30323;
 
-double iterate_rng(double& s1, double& s2, double& s3)
-{
-    s1 = mod(171 * s1, 30269);
-    s2 = mod(172 * s2, 30307);
-    s3 = mod(170 * s3, 30323);
-
-    return mod(s1/30269.0 + s2/30307.0 + s3/30323.0, 1);
-}
-
-double rng()
-{
-    return iterate_rng(s1, s2, s3)
+    return fmod(s1/30269.0 + s2/30307.0 + s3/30323.0, 1.0);
 }
 ```
 
