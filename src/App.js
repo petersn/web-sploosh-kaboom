@@ -1,31 +1,74 @@
 import React from 'react';
 import './App.css';
-//import $ from 'jquery';
 import init, {
     set_board_table,
     calculate_probabilities_with_board_constraints,
     calculate_probabilities_from_game_history,
     disambiguate_final_board,
 } from './wasm/sploosh_wasm.js';
-//import { findAllByPlaceholderText } from '@testing-library/react';
-//import NumericInput from 'react-numeric-input';
 const interpolate = require('color-interpolate');
 
-/*
-// TODO: Properly use IndexedDB to cache the board table.
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
 indexedDBreq.onerror = function(event) {
     alert('Failed to access IndexedDB.');
 };
+// Known issue: There's basically a race condition here in that I don't
+// wait for this onsuccess to potentially statr calling dbRead.
 indexedDBreq.onsuccess = function(event) {
     globalDB = event.target.result;
     globalDB.onerror = function(event) {
         alert('IndexedDB error: ' + event.target.errorCode);
     };
 };
-var transaction = db.transaction(["customers"], "readwrite");
-*/
+indexedDBreq.onupgradeneeded = function(event) {
+    const db = event.target.result;
+    db.createObjectStore('sk');
+}
+
+// TODO: Am I using IndexedDB even remotely correctly!? This looks so weird...
+
+function dbWrite(key, value) {
+    if (globalDB === null)
+        return;
+
+    const transaction = globalDB.transaction(['sk'], 'readwrite');
+
+    transaction.oncomplete = function(event) {
+        //alert('Transaction complete!');
+    }
+    transaction.onerror = function(event) {
+        alert('Transaction error!');
+    }
+    const objectStore = transaction.objectStore('sk');
+    const request = objectStore.add(value, key);
+    request.onsuccess = function(event) {
+        //alert('Request success!');
+    }
+}
+
+function dbRead(key) {
+    return new Promise((resolve, reject) => {
+        const transaction = globalDB.transaction(['sk']);
+
+        transaction.oncomplete = function(event) {
+            //alert('Transaction complete!');
+        }
+        transaction.onerror = function(event) {
+            alert('Transaction error!');
+        }
+        const objectStore = transaction.objectStore('sk');
+        const request = objectStore.get(key);
+        request.onsuccess = function(event) {
+            //alert('Request success!');
+            resolve(event.target.result);
+        };
+        request.onerror = function(event) {
+            //alert('Request failure!');
+            reject();
+        };
+    });
+}
 
 //const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
 //const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
@@ -96,27 +139,41 @@ async function globalProcessingTick() {
     setTimeout(globalProcessingTick, 25);
 }
 
-function makeBoardIndicesTable() {
-    /*
-    // Cache in localStorage
-    const keyName = 'BoardIndicesTable';
-    const fromCache = window.localStorage.getItem(keyName);
-    if (fromCache !== null)
-        return JSON.parse(fromCache);
-    const value = rawMakeBoardIndicesTable();
-    window.localStorage.setItem(keyName, JSON.stringify(value));
-    return value;
-    */
-    return rawMakeBoardIndicesTable();
-    /*
-    const req = new XMLHttpRequest();
-    req.open('GET', process.env.PUBLIC_URL + '/board_indices.json', false);
-    req.send(null);
-    return JSON.parse(req.responseText);
-    */
+async function dbCachedFetch(url, callback) {
+    function cacheMiss() {
+        const req = new XMLHttpRequest();
+        req.open('GET', process.env.PUBLIC_URL + url, true);
+        req.responseType = 'arraybuffer';
+        req.onload = (evt) => {
+            dbWrite(url, req.response);
+            callback(req.response);
+        };
+        req.send();
+        return null;
+    }
+    const result = await dbRead(url).catch(cacheMiss);
+    if (result === undefined)
+        cacheMiss();
+    // This is sort of an ugly protocol, but if we hit the catch path above
+    // we signal that the callback was already called by returning null.
+    if (result === null)
+        return;
+    callback(result);
 }
 
-function rawMakeBoardIndicesTable() {
+async function makeBoardIndicesTable() {
+    function cacheMiss() {
+        const result = actuallyMakeBoardIndicesTable();
+        dbWrite('boardIndicesTable', result);
+        return result;
+    }
+    const result = await dbRead('boardIndicesTable').catch(cacheMiss);
+    if (result === undefined)
+        return cacheMiss();
+    return result;
+}
+
+function actuallyMakeBoardIndicesTable() {
     // This convention here has to match that in the Rust component and table building C++ exactly!
     const descs = [];
     for (let y = 0; y < 8; y++)
@@ -165,15 +222,8 @@ function rawMakeBoardIndicesTable() {
 }
 
 if (!window.JUST_ONCE) {
-    globalProcessingTick();
-    /*
-    setInterval(
-        () => {
-            
-        },
-        50,
-    );
-    */
+    // XXX: Only re-enable this if we're re-enabling CV screen cap.
+    //globalProcessingTick();
 }
 
 function sampleSquid(length) {
@@ -548,21 +598,18 @@ class MainMap extends React.Component {
         */
     }
 
-    initializeTurboBlurboMode(bigTable) {
+    async initializeTurboBlurboMode(bigTable) {
         if (this.state.turboBlurboMode !== false)
             return;
         this.setState({turboBlurboMode: 'initializing'});
-        this.boardIndices = makeBoardIndicesTable();
+        this.boardIndices = await makeBoardIndicesTable();
         this.boardIndexToLayoutString = new Array(Object.keys(this.boardIndices).length);
         for (const key of Object.keys(this.boardIndices))
             this.boardIndexToLayoutString[this.boardIndices[key]] = key;
 
-        const req = new XMLHttpRequest();
         const tableName = bigTable ? '/board_table_25M.bin' : '/board_table_5M.bin';
-        req.open('GET', process.env.PUBLIC_URL + tableName, true);
-        req.responseType = 'arraybuffer';
-        req.onload = (evt) => {
-            this.boardTable = new Uint32Array(req.response);
+        dbCachedFetch(tableName, (buf) => {
+            this.boardTable = new Uint32Array(buf);
             // Warning: Do I need to await wasm here first?
             console.log('Board table length:', this.boardTable.length);
             // Make sure every value is in range.
@@ -571,8 +618,7 @@ class MainMap extends React.Component {
                     alert('BUG BUG BUG: Bad value in board table: ' + v);
             set_board_table(this.boardTable);
             this.setState({turboBlurboMode: true, squidsGotten: '0', mode: 'calculator'});
-        };
-        req.send();
+        });
     }
 
     toggleVideoProcessing() {
@@ -1486,7 +1532,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.6)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.8)</span>
         </div>;
     }
 }
