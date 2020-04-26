@@ -1000,7 +1000,13 @@ class MainMap extends React.Component {
 
     reportHit() {
         if (this.state.best !== null && this.state.grid[this.state.best] === null)
+        {
             this.onClick(...this.state.best, true);
+            const {hits, misses, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
+            if (hits.length === 9) {
+                this.incrementKills();
+            }
+        }
     }
 
     async incrementKills() {
