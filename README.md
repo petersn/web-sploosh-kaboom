@@ -1,5 +1,5 @@
 
-# Live version: [https://petersn.github.io/web-sploosh-kaboom/]
+# Live version: https://petersn.github.io/web-sploosh-kaboom/
 
 # Sploosh Kaboom FAQ
 
