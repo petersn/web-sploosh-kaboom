@@ -14,7 +14,7 @@ indexedDBreq.onerror = function(event) {
     alert('Failed to access IndexedDB.');
 };
 // Known issue: There's basically a race condition here in that I don't
-// wait for this onsuccess to potentially statr calling dbRead.
+// wait for this onsuccess to potentially start calling dbRead.
 indexedDBreq.onsuccess = function(event) {
     globalDB = event.target.result;
     globalDB.onerror = function(event) {
@@ -152,8 +152,10 @@ async function dbCachedFetch(url, callback) {
         return null;
     }
     const result = await dbRead(url).catch(cacheMiss);
-    if (result === undefined)
+    if (result === undefined) {
         cacheMiss();
+        return;
+    }
     // This is sort of an ugly protocol, but if we hit the catch path above
     // we signal that the callback was already called by returning null.
     if (result === null)
@@ -1024,7 +1026,8 @@ class MainMap extends React.Component {
             } else {
                 // If we're the last delta, and also not the first, then possibly use our time delta.
                 if (index === null && this.state.timerStepEstimate !== null) {
-                    priorStepsFromPreviousMeans.push(this.state.timerStepEstimate);
+                    // Because the timerStepEstimate can be negative I have to avoid underflow.
+                    priorStepsFromPreviousMeans.push(Math.max(0, this.state.timerStepEstimate));
                     priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.timedBoardStepsThousandsStdDev));
                 } else {
                     priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
@@ -1194,7 +1197,6 @@ class MainMap extends React.Component {
         const boardTimer = this.timerRef.current;
         if (boardTimer === null)
             return;
-        // TODO: Take into account invalidation here.
         const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(boardTimer.getSecondsElapsed());
         this.setState({timerStepEstimate});
         console.log('Timer step estimate:', timerStepEstimate);
@@ -1538,7 +1540,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.8)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.9)</span>
         </div>;
     }
 }

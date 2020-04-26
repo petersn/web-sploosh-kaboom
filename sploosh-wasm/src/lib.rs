@@ -150,10 +150,7 @@ impl PossibleBoards {
         let mut probabilities = [0.0; 64];
 
         for (i, pb) in (&self.boards).iter().enumerate() {
-            let board_prob = board_priors[i] * pb.probability;
-            if board_prob == 0.0 {
-                continue;
-            }
+            let board_prob = (1e-20 + board_priors[i]) * pb.probability;
             if pb.check_compatible(hit_mask, miss_mask, squids_gotten) {
                 for bit_index in 0..64 {
                     if (pb.squids & (1 << bit_index)) != 0 {
