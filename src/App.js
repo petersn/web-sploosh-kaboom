@@ -11,6 +11,21 @@ import init, {
 //import NumericInput from 'react-numeric-input';
 const interpolate = require('color-interpolate');
 
+/*
+// TODO: Properly use IndexedDB to cache the board table.
+var globalDB = null;
+const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
+indexedDBreq.onerror = function(event) {
+    alert('Failed to access IndexedDB.');
+};
+indexedDBreq.onsuccess = function(event) {
+    globalDB = event.target.result;
+    globalDB.onerror = function(event) {
+        alert('IndexedDB error: ' + event.target.errorCode);
+    };
+};
+var transaction = db.transaction(["customers"], "readwrite");
+*/
 
 //const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
 //const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
@@ -308,6 +323,105 @@ class LayoutDrawingBoard extends React.Component {
     }
 }
 
+var globalBoardTimer = null;
+
+setInterval(
+    () => {
+        if (globalBoardTimer !== null)
+            globalBoardTimer.forceUpdate();
+    },
+    69,
+);
+
+function renderYesNo(bool) {
+    return bool ?
+        <span style={{color: 'green', textShadow: '0px 0px 2px white'}}>YES</span> :
+        <span style={{color: 'red', textShadow: '0px 0px 2px white'}}>NO</span>;
+}
+
+class BoardTimer extends React.Component {
+    constructor() {
+        super();
+        globalBoardTimer = this;
+        this.state = {
+            previouslyAccumulatedSeconds: 0.0,
+            //previouslyAccumulatedRupeeSeconds: 0.0,
+            timerStartMS: 0.0,
+            timerRunning: false,
+            includesLoadingTheRoom: true,
+            //rupeesCollected: false,
+            includedRewardsGotten: 0,
+            invalidated: false,
+        };
+    }
+
+    toggleRunning() {
+        const now = performance.now();
+        const elapsed = 1e-3 * (now - this.state.timerStartMS);
+        if (this.state.timerRunning)
+            this.setState({previouslyAccumulatedSeconds: this.state.previouslyAccumulatedSeconds + elapsed});
+        this.setState({timerRunning: !this.state.timerRunning, timerStartMS: now});
+    }
+
+    adjustRewards(delta) {
+        this.setState({includedRewardsGotten: Math.max(0, Math.min(2, this.state.includedRewardsGotten + delta))});
+    }
+
+    toggleLoadingTheRoom() {
+        this.setState({includesLoadingTheRoom: !this.state.includesLoadingTheRoom});
+    }
+
+    toggleInvalidated() {
+        this.setState({invalidated: !this.state.invalidated});
+    }
+
+    /*
+    toggleRupeesCollected() {
+        // TODO: Appropriately perform accumulation, then change the rate.
+        this.setState({rupeesCollected: !this.state.rupeesCollected});
+    }
+    */
+
+    resetTimer() {
+        this.setState({
+            previouslyAccumulatedSeconds: 0.0,
+            timerStartMS: performance.now(),
+            timerRunning: false,
+        });
+    }
+
+    getSecondsElapsed() {
+        let total = this.state.previouslyAccumulatedSeconds;
+        if (this.state.timerRunning) {
+            const now = performance.now();
+            total += 1e-3 * (now - this.state.timerStartMS);
+        }
+        return total;
+    }
+
+    guessStepsElapsedFromTime(timeDeltaSeconds) {
+        // I did some linear regressions from real HD Italian runs. I'll put some data up at some point.
+        let prediction = 156 + 252 * timeDeltaSeconds;
+        if (this.state.includesLoadingTheRoom)
+            prediction += -940;
+        prediction += this.state.includedRewardsGotten * 760;
+        return Math.round(prediction);
+    }
+
+    render() {
+        const elapsed = this.getSecondsElapsed();
+        if (this.state.invalidated)
+            return <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>&nbsp; - INVALIDATED</span>;
+        return <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
+            &nbsp;- Seconds elapsed: {elapsed.toFixed(2)}
+            &nbsp;- Steps: {this.guessStepsElapsedFromTime(elapsed)}
+            &nbsp;- Entered room: {renderYesNo(this.state.includesLoadingTheRoom)}
+            &nbsp;- Rewards gotten: {this.state.includedRewardsGotten}
+            {/* &nbsp;- Rupees collected: {renderYesNo(this.state.rupeesCollected)} */}
+        </span>;
+    }
+}
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -315,6 +429,7 @@ class MainMap extends React.Component {
     outputCanvasRef = React.createRef();
     hiddenAreaRef = React.createRef();
     layoutDrawingBoardRefs = [React.createRef(), React.createRef(), React.createRef()];
+    timerRef = React.createRef();
 
     constructor() {
         super();
@@ -327,7 +442,6 @@ class MainMap extends React.Component {
         globalMap = this;
         this.previouslyReadStates = [null, null, null];
     }
-
 
     componentDidMount() {
         this.makeReferenceImageCanvases();
@@ -384,13 +498,18 @@ class MainMap extends React.Component {
             doVideoProcessing: false,
             lastComputationTime: -1,
             lastCVTime: -1,
+
             turboBlurboMode: false,
+            turboBlurboTiming: false,
+
+            timerStepEstimate: null,
 
             potentialMatches: [],
             firstBoardStepsThousands: 500,
             firstBoardStepsThousandsStdDev: 500,
             nextBoardStepsThousands: 7,
             nextBoardStepsThousandsStdDev: 3,
+            timedBoardStepsThousandsStdDev: 0.2,
         };
     }
 
@@ -451,7 +570,7 @@ class MainMap extends React.Component {
                 if (v > 604583)
                     alert('BUG BUG BUG: Bad value in board table: ' + v);
             set_board_table(this.boardTable);
-            this.setState({turboBlurboMode: true, squidsGotten: '0'});
+            this.setState({turboBlurboMode: true, squidsGotten: '0', mode: 'calculator'});
         };
         req.send();
     }
@@ -811,16 +930,26 @@ class MainMap extends React.Component {
     }
 
     *findMatchingLocations(observedBoards, startIndex, scanRange) {
-        if (observedBoards.length === 0)
+        if (observedBoards.length === 0) {
             yield [];
+            return;
+        }
         // Try to find the first match.
         const soughtBoard = observedBoards[0];
         const boardTable = this.boardTable;
         const indexMax = Math.min(boardTable.length, startIndex + scanRange);
         for (let i = startIndex; i < indexMax; i++)
             if (boardTable[i] === soughtBoard)
-                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 10000))
+                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 15000))
                     yield [i, ...subResult];
+    }
+
+    recomputePotentialMatches() {
+        const [observedBoards, _1, _2] = this.makeGameHistoryArguments();
+        const matches = [];
+        for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
+            matches.push(match);
+        this.setState({potentialMatches: matches});
     }
 
     makeGameHistoryArguments() {
@@ -834,10 +963,8 @@ class MainMap extends React.Component {
             observedBoards.push(ob);
         }
 
-        const matches = [];
-        for (const match of this.findMatchingLocations(observedBoards, 0, 1000000))
-            matches.push(match);
-        this.setState({potentialMatches: matches});
+        // The optimal thing to do here is to save the sequence of step delta estimates, but to make
+        // the tool less fragile we only use our timer-based estimates for the very final mean.
 
         const priorStepsFromPreviousMeans = [];
         const priorStepsFromPreviousStdDevs = [];
@@ -849,8 +976,14 @@ class MainMap extends React.Component {
                 priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.firstBoardStepsThousands));
                 priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
             } else {
-                priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
-                priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.nextBoardStepsThousandsStdDev));
+                // If we're the last delta, and also not the first, then possibly use our time delta.
+                if (index === null && this.state.timerStepEstimate !== null) {
+                    priorStepsFromPreviousMeans.push(this.state.timerStepEstimate);
+                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.timedBoardStepsThousandsStdDev));
+                } else {
+                    priorStepsFromPreviousMeans.push(1000.0 * Number(this.state.nextBoardStepsThousands));
+                    priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.nextBoardStepsThousandsStdDev));
+                }
             }
             first = false;
         }
@@ -881,6 +1014,7 @@ class MainMap extends React.Component {
     }
 
     async doComputation(grid, squidsGotten) {
+        console.log('Doing computation:', squidsGotten, grid);
         const t0 = performance.now();
         const {hits, misses, numericSquidsGotten} = this.getGridStatistics(grid, squidsGotten);
 
@@ -888,6 +1022,7 @@ class MainMap extends React.Component {
         let probabilities;
         if (this.state.turboBlurboMode) {
             const gameHistoryArguments = this.makeGameHistoryArguments();
+            console.log('gameHistoryArguments:', gameHistoryArguments);
 
             probabilities = calculate_probabilities_from_game_history(
                 Uint8Array.from(hits),
@@ -1003,11 +1138,32 @@ class MainMap extends React.Component {
             this.onClick(...this.state.best, true);
     }
 
+    splitTimer() {
+        const boardTimer = this.timerRef.current;
+        if (boardTimer === null)
+            return;
+        // TODO: Take into account invalidation here.
+        const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(boardTimer.getSecondsElapsed());
+        this.setState({timerStepEstimate});
+        console.log('Timer step estimate:', timerStepEstimate);
+        boardTimer.setState({
+            previouslyAccumulatedSeconds: 0.0,
+            timerStartMS: performance.now(),
+            // After the first split we're no longer loading the room.
+            includesLoadingTheRoom: false,
+            includedRewardsGotten: 0,
+            timerRunning: true,
+            invalidated: false,
+        });
+    }
+
     async incrementKills() {
         let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
         let grid = this.state.grid;
         numericValue++;
         if (numericValue === 4) {
+            // TODO: Think very carefully about this timer splitting, and if and when it should happen.
+            this.splitTimer();
             const success = await this.copyToHistory();
             if (success) {
                 numericValue = 0;
@@ -1108,8 +1264,24 @@ class MainMap extends React.Component {
         }
         return <div style={{
             margin: '20px',
+            color: 'white',
         }}>
-            <span style={{ fontSize: '150%', color: 'white' }}>Shots used: {usedShots}</span><br />
+            <div>
+                {
+                    this.state.turboBlurboMode && this.state.turboBlurboTiming && <div style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
+                        (space) toggle timer &nbsp;&nbsp; (,) add reward &nbsp;&nbsp; (&lt;) remove reward &nbsp;&nbsp; (m) toggle room &nbsp;&nbsp; (;) invalidate &nbsp;&nbsp; (:) reset timer
+                    </div>
+                }
+                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>Shots used: {usedShots}</span>
+                {
+                    this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+                        <BoardTimer ref={this.timerRef} />
+                        <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
+                            &nbsp; Last steps: {this.state.timerStepEstimate === null ? '~' : this.state.timerStepEstimate}
+                        </span>
+                    </>
+                }
+            </div>
             {this.state.doVideoProcessing || this.renderActualMap(false)}
             {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
@@ -1152,14 +1324,33 @@ class MainMap extends React.Component {
             }
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (k)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
-            <select
-                style={{ marginLeft: '20px', fontSize: '150%' }}
-                value={this.state.mode}
-                onChange={(event) => this.setState({ mode: event.target.value })}
-            >
-                <option value="calculator">Calculator Mode</option>
-                <option value="practice">Practice Mode</option>
-            </select><br />
+            {
+                this.state.turboBlurboMode ||
+                <select
+                    style={{ marginLeft: '20px', fontSize: '150%' }}
+                    value={this.state.mode}
+                    onChange={(event) => this.setState({ mode: event.target.value })}
+                >
+                    <option value="calculator">Calculator Mode</option>
+                    <option value="practice">Practice Mode</option>
+                </select>
+            }
+            {
+                this.state.turboBlurboMode &&
+                <div style={{display: 'inline-block', margin: '10px', border: '1px solid white', borderRadius: '5px', fontSize: '130%', padding: '5px'}}>
+                    <span style={{margin: '5px'}}>Timer mode:</span>
+                    <input
+                        type="checkbox"
+                        checked={this.state.turboBlurboTiming}
+                        onChange={(event) => this.setState({ turboBlurboTiming: !this.state.turboBlurboTiming })}
+                        style={{
+                            margin: '10px',
+                            transform: 'scale(2)',
+                        }}
+                    />
+                </div>
+            }
+            <br />
             {openingOptimizer && (!this.state.screenRecordingActive) && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
@@ -1167,7 +1358,6 @@ class MainMap extends React.Component {
                     }
                 </div>
             </>}
-            {/* <button style={{ fontSize: '150%' }} onClick={() => { this.readBoardState(); }}>Do Computation</button><br /> */}
             <br/>
             <hr/>
             {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...<br/></div>}
@@ -1178,23 +1368,22 @@ class MainMap extends React.Component {
                     )}
                 </div>
                 <div style={{color: 'white', fontSize: '130%'}}>
-                    {/*
-                    First board mean:   <NumericInput style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onInput={num => this.setState({firstBoardStepsThousands: num})}/> &nbsp;
-                    First board stddev: <NumericInput style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onInput={num => this.setState({firstBoardStepsThousandsStdDev: num})}/> &nbsp;
-                    Next board mean:    <NumericInput style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onInput={num => this.setState({nextBoardStepsThousands: num})}/> &nbsp;
-                    Next board stddev:  <NumericInput style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onInput={num => this.setState({nextBoardStepsThousandsStdDev: num})}/>
-                    */}
                     Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps):<br/>
                     First board mean:   <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
                     First board stddev: <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
                     Next board mean:    <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
-                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
+                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Timed board stddev: <input style={{width: '50px'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
                 </div>
                 <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '1px solid white', width: '400px', minHeight: '20px', display: 'inline-block'}}>
-                    {this.state.potentialMatches.map((m, i) => <div key={i}>
-                        Potential match:{m.map((x, i) => <span key={i}> {x}</span>)}
-                    </div>)}
-                </div>
+                    {this.state.potentialMatches.map((match, i) => {
+                        const diffs = match.slice(1);
+                        return <div key={i}>
+                            Potential match: {match[0]}{diffs.map((x, i) => <> +{x - match[i]}</>)}
+                        </div>;
+                    })}
+                </div><br/>
+                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
                 <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.<br/></div>
             </>}
             <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
@@ -1251,6 +1440,21 @@ function globalShortcutsHandler(evt) {
         globalMap.incrementKills();
     if (evt.key === 'h' && globalMap !== null)
         globalMap.copyToHistory();
+
+    if (evt.key === ' ' && globalBoardTimer !== null) {
+        globalBoardTimer.toggleRunning();
+        evt.preventDefault();
+    }
+    if (evt.key === ',' && globalBoardTimer !== null)
+        globalBoardTimer.adjustRewards(+1);
+    if (evt.key === '<' && globalBoardTimer !== null)
+        globalBoardTimer.adjustRewards(-1);
+    if (evt.key === 'm' && globalBoardTimer !== null)
+        globalBoardTimer.toggleLoadingTheRoom();
+    if (evt.key === ';' && globalBoardTimer !== null)
+        globalBoardTimer.toggleInvalidated();
+    if (evt.key === ':' && globalBoardTimer !== null)
+        globalBoardTimer.resetTimer();
 }
 
 document.addEventListener('keydown', globalShortcutsHandler);
