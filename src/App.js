@@ -1209,6 +1209,7 @@ class MainMap extends React.Component {
             timerRunning: true,
             invalidated: false,
         });
+        this.doComputation(this.state.grid, this.state.squidsGotten);
     }
 
     async incrementKills() {
@@ -1217,8 +1218,9 @@ class MainMap extends React.Component {
         numericValue++;
         if (numericValue === 4) {
             // TODO: Think very carefully about this timer splitting, and if and when it should happen.
+            const gameHistoryArguments = this.makeGameHistoryArguments();
             this.splitTimer();
-            const success = await this.copyToHistory();
+            const success = await this.copyToHistory(gameHistoryArguments);
             if (success) {
                 numericValue = 0;
                 grid = this.makeEmptyGrid();
@@ -1230,9 +1232,10 @@ class MainMap extends React.Component {
         this.doComputation(grid, '' + numericValue);
     }
 
-    async copyToHistory() {
+    async copyToHistory(gameHistoryArguments) {
         const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
-        const gameHistoryArguments = this.makeGameHistoryArguments();
+        if (gameHistoryArguments === undefined)
+            gameHistoryArguments = this.makeGameHistoryArguments();
         await wasm;
         const finalBoard = disambiguate_final_board(
             Uint8Array.from(hits),
@@ -1376,7 +1379,7 @@ class MainMap extends React.Component {
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
                 </>
             }
-            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (k)</button>
+            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (c)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
             {
                 this.state.turboBlurboMode ||
@@ -1486,12 +1489,15 @@ function globalShortcutsHandler(evt) {
     if (evt.key === 'p' && globalMap !== null)
         globalMap.toggleVideoProcessing();
 
-    if (evt.key === 'z' && globalMap !== null)
+    // Add z or y for German keyboard support.
+    if ((evt.key === 'z' || evt.key === 'y')  && globalMap !== null)
         globalMap.reportMiss();
     if (evt.key === 'x' && globalMap !== null)
         globalMap.reportHit();
-    if (evt.key === 'k' && globalMap !== null)
+    if (evt.key === 'c' && globalMap !== null)
         globalMap.incrementKills();
+    if (evt.key === 's' && globalMap !== null)
+        globalMap.splitTimer();
     if (evt.key === 'h' && globalMap !== null)
         globalMap.copyToHistory();
 
@@ -1540,7 +1546,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.9)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span>
         </div>;
     }
 }
