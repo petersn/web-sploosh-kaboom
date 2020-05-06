@@ -338,6 +338,9 @@ class LayoutDrawingBoard extends React.Component {
     render() {
         const layoutString = this.getLayoutString();
         let boardIndex = this.props.parent.boardIndices[layoutString];
+        if (boardIndex === undefined) {
+            boardIndex = "waiting...";
+        }
         const isSelectedCell = (x, y) => this.state.selectedCell !== null && x === this.state.selectedCell[0] && y === this.state.selectedCell[1];
 
         return <div style={{
