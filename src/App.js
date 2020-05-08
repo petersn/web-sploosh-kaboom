@@ -556,6 +556,7 @@ class MainMap extends React.Component {
 
             turboBlurboMode: false,
             turboBlurboTiming: false,
+            showKeyShortcuts: false,
 
             timerStepEstimate: null,
 
@@ -1180,6 +1181,10 @@ class MainMap extends React.Component {
         this.doComputation(newState.grid, newState.squidsGotten);
     }
 
+    toggleShowShorcuts() {
+        this.state.showKeyShortcuts = !this.state.showKeyShortcuts;
+    }
+
     reportMiss() {
         if (this.state.best !== null && this.state.grid[this.state.best] === null)
             this.onClick(...this.state.best);
@@ -1271,7 +1276,7 @@ class MainMap extends React.Component {
     }
 
     renderActualMap(overlayMode) {
-        return <div style={{display: 'inline-block'}}>
+        return <div style={{display: 'inline-block', order: '1'}}>
             {naturalsUpTo(8).map(
                 (y) => <div key={y} style={{
                     display: 'flex',
@@ -1327,22 +1332,57 @@ class MainMap extends React.Component {
             color: 'white',
         }}>
             <div>
-                {
-                    this.state.turboBlurboMode && this.state.turboBlurboTiming && <div style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
-                        (space) toggle timer &nbsp;&nbsp; (,) add reward &nbsp;&nbsp; (&lt;) remove reward &nbsp;&nbsp; (m) toggle room &nbsp;&nbsp; (;) invalidate &nbsp;&nbsp; (:) reset timer
-                    </div>
-                }
                 <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>Shots used: {usedShots}</span>
                 {
                     this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
                         <BoardTimer ref={this.timerRef} />
                         <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
-                            &nbsp; Last steps: {this.state.timerStepEstimate === null ? '~' : this.state.timerStepEstimate}
+                            &nbsp; Last steps: {this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}
                         </span>
                     </>
                 }
             </div>
-            {this.state.doVideoProcessing || this.renderActualMap(false)}
+            <div class="container">
+                <div style= {{ order: "0"}}></div>
+                {this.state.doVideoProcessing || this.renderActualMap(false)}
+                {this.state.turboBlurboMode && this.state.turboBlurboTiming &&
+                    <div class="container" style= {{ order: "2", justifySelf: 'right', flexDirection: "column", justifyContent: "flex-start", alignContent: "center"}} >
+                        <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Show Shortcuts</button>
+                        {this.state.showKeyShortcuts && 
+                            <table style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace', border: '1px solid black'}}>
+                                    <tr>
+                                    <th>Control</th>
+                                    <th>Shortcut</th>
+                                </tr>
+                                <tr>
+                                    <td>Toggle Timer</td>
+                                    <td>&nbsp;Space&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td>Add Reward</td>
+                                    <td>&nbsp;,&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td>Remove Reward</td>
+                                    <td>&nbsp;&lt;&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td>Toggle Entered Room</td>
+                                    <td>&nbsp;m&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td>Invalidate Timer</td>
+                                    <td>&nbsp;;&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td>Reset Timer</td>
+                                    <td>&nbsp;:&nbsp;</td>
+                                </tr>
+                            </table>
+                        }
+                    </div>
+                }
+            </div>
             {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
