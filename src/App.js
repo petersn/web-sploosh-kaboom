@@ -1181,10 +1181,6 @@ class MainMap extends React.Component {
         this.doComputation(newState.grid, newState.squidsGotten);
     }
 
-    toggleShowShorcuts() {
-        this.state.showKeyShortcuts = !this.state.showKeyShortcuts;
-    }
-
     reportMiss() {
         if (this.state.best !== null && this.state.grid[this.state.best] === null)
             this.onClick(...this.state.best);
@@ -1589,7 +1585,8 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span><br/>
+            <span style={{ color: 'white' }}><a href="https://github.com/petersn/web-sploosh-kaboom">GitHub Repository</a></span>
         </div>;
     }
 }
