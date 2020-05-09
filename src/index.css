@@ -19,10 +19,18 @@ th, td, tr, table{
 }
 
 .container {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
 }
 
-.flex-item {
-  flex-grow: 1;
+.tableContainer {
+  display: grid;
+  border-top: 2px solid black;
+  border-right: 2px solid black;
+}
+
+.tableContainer > span {
+  padding: 8px 4px;
+  border-left: 2px solid black;
+  border-bottom: 2px solid black;
 }
