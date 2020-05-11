@@ -520,7 +520,7 @@ function makeSquidLayout() {
 }
 
 const exampleSquidLayouts = [];
-for (let i = 0; i < 100; i++)
+for (let i = 0; i < 1000; i++)
     exampleSquidLayouts.push(makeSquidLayout());
 
 async function drawHit(root, x, y, scale, color) {
@@ -712,7 +712,7 @@ async function showBoardAveraging(root) {
                 .transition()
                 .duration(500 * timeScale)
                 .attr("opacity", 0.0);
-            clone.selectAll("rect").each(function(rect) {
+            clone.selectAll("rect").each(function() {
                 rect = d3.select(this);
                 rect.attr("fill-opacity", 1);
                 if (rect.attr("fill") === "rgb(0, 0, 68)") {
@@ -729,7 +729,7 @@ async function showBoardAveraging(root) {
                         .attr("fill-opacity", 0);
                 }
             });
-            clone.selectAll("line").each(function(line) {
+            clone.selectAll("line").each(function() {
                 line = d3.select(this);
                 line.attr("stroke-opacity", 1);
                 line.transition()
@@ -1114,7 +1114,7 @@ async function showFirstBoardProgression(root) {
     const axisGroup = root.append("g");
     fadeIn(makeExtendoArrow(-30, 0, 1000, 0, axisGroup)[0]);
     fadeIn(makeExtendoArrow(0, 30, 0, -500, axisGroup)[0]);
-    axisGroup.attr("transform", d3Transform().scale(1.5).translate([135, 600]));
+    axisGroup.attr("transform", d3Transform().scale(1.5).translate([135, 570]));
 
     // Make the axis labels appear.
     await sleep(1000);
@@ -1126,7 +1126,7 @@ async function showFirstBoardProgression(root) {
         .attr("font-size", "40px")
         .attr("font-style", "italic")
         .attr("transform", d3Transform()
-            .translate([50 - 160, 70])
+            .translate([50 - 160, 120])
         );
     textGroup.append("text").text("0%")
         .attr("x", 0).attr("y", 0)
@@ -1161,30 +1161,187 @@ async function showFirstBoardProgression(root) {
         .attr("opacity", 1)
         .attr("stroke-width", 3);
 
+    const tickTextGroup = axisGroup.append("g");
+
     // Make little tick marks appear.
     await sleep(1000);
+
+    //debugPoint();
+
+    // Make strategic reserves of ticks.
     const ticksGroup = axisGroup.append("g");
-    for (let i = 0; i < 98; i++) {
-        await sleep(10);
-
-        const x = 10 + 10 * i
-
+    ticksGroup.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    const tickReserves = [];
+    for (let i = 0; i < 400; i++) {
         const tick = ticksGroup.append("line")
-            .attr("x1", x).attr("y1", 0).attr("x2", x).attr("y2", 0)
-            .attr("stroke-width", 0).attr("stroke", "black").attr("stroke-linecap", "round")
-            .attr("fill", "none");
-        if (i % 5 == 0) {
-            tick.transition()
-                .duration(500)
-                .attr("stroke-width", 3)
-                .attr("y2", 20);
-        } else {
-            tick.transition()
-                .duration(500)
-                .attr("stroke-width", 2)
-                .attr("y2", 15);
-        }
+            .attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 15)
+            .attr("stroke-width", 2).attr("stroke", "black").attr("stroke-linecap", "round")
+            .attr("opacity", 0).attr("fill", "none");
+        tickReserves.push(tick);
     }
+    const textReserves = [];
+    for (let i = 0; i < 50; i++) {
+        const text = ticksGroup.append("text").text("?")
+            .attr("x", 0).attr("y", 0)
+            .attr("font-family", "EB Garamond")
+            .attr("font-size", "30px")
+            //.attr("font-family", "monospace")
+            //.attr("font-size", "20px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle");
+        textReserves.push(text);
+    }
+
+    const proxyParameterObject = root.append("g");
+    proxyParameterObject.attr("x", 0).attr("y", Math.log(1/30));
+    const getAxisParameters = elapsed => {
+        const scale = Math.max(1/30, Math.exp(+proxyParameterObject.attr("y")));
+        return {
+            left: +proxyParameterObject.attr("x") - scale * 15,
+            scale,
+        }
+    };
+
+    function renderNumber(scale, xWorldSpace) {
+        if (xWorldSpace >= 1e6) {
+            let s = (xWorldSpace / 1e6).toFixed(3);
+            while (s.endsWith("0") || s.endsWith("."))
+                s = s.slice(0, -1);
+            return s + "M"
+        }
+        return Math.round(Math.max(0, xWorldSpace)).toLocaleString();
+        //return "" + Math.round(xWorldSpace);
+    }
+
+    const clamp = x => Math.max(0, Math.min(1, x));
+
+    var startTimestamp = null;
+    const moveAxes = timestamp => {
+        if (startTimestamp === null)
+            startTimestamp = timestamp;
+        const elapsed = timestamp - startTimestamp;
+        if (keysHeld.has("a") || keysHeld.has("d")) {
+            let scale = Math.exp(proxyParameterObject.attr("y"));
+            scale *= keysHeld.has("d") - keysHeld.has("a");
+            proxyParameterObject.attr("x", (+proxyParameterObject.attr("x")) + scale * 10);
+        }
+        if (keysHeld.has("w") || keysHeld.has("s")) {
+            let scale = keysHeld.has("s") - keysHeld.has("w");
+            proxyParameterObject.attr("y", (+proxyParameterObject.attr("y")) + scale * 0.01);
+        }
+
+        const params = getAxisParameters(timestamp);
+        const splitBase = 10;
+        // Round params.scale down to a power of 5.
+        // This is the spacing in world-space units that we have a rendered tick for.
+        const logScale = Math.log(params.scale * 30) / Math.log(splitBase);
+        const smallestTickSpacingWorldSpace = Math.round(Math.exp(
+            Math.floor(logScale) * Math.log(splitBase)
+        ));
+        const sizingError = logScale - Math.floor(logScale);
+        // Round params.left down to a multiple of smallestTickSpacingWorldSpace.
+        // This is the world-space offset of the leftmost tick we draw.
+        let tickIndex = Math.ceil(params.left / smallestTickSpacingWorldSpace);
+        let xWorldSpace = tickIndex * smallestTickSpacingWorldSpace;
+        let ticksConsumed = 0;
+        let textConsumed = 0;
+        while (ticksConsumed < tickReserves.length) {
+            if (xWorldSpace === 0)
+                window.msg = true;
+            const tickXScreenSpace = (xWorldSpace - params.left) / params.scale;
+            if (tickXScreenSpace > 990)
+                break;
+            let tickSizeCategory = 1;
+            if (tickIndex % splitBase === 0)
+                tickSizeCategory = 2;
+            if (tickIndex % Math.pow(splitBase, 2) === 0)
+                tickSizeCategory = 3;
+            tickSizeCategory -= sizingError;
+            if (xWorldSpace === 0)
+                tickSizeCategory = 3;
+
+            let textSizeCategory = tickSizeCategory;
+            // This bonus only applies when splitBase is even.
+            if (
+                tickIndex % splitBase === splitBase / 2 ||
+                tickIndex % Math.pow(splitBase, 2) === Math.pow(splitBase, 2) / 2 ||
+                tickIndex % Math.pow(splitBase, 3) === Math.pow(splitBase, 3) / 2
+            )
+                textSizeCategory += 0.65;
+
+            // Do a non-linear transform on the tick size categories to squish it from [0, 2] up more towards the high end of that range.
+            tickSizeCategory = Math.sqrt(tickSizeCategory / 2) * 2;
+            // Fade out the ticks near the right end of the scale.
+            const fadeOutDistance = 100;
+            const leftFadeOpacity = Math.pow(clamp(tickXScreenSpace / fadeOutDistance), 1.5);
+            const rightFadeOpacity = Math.pow(clamp(1 - (tickXScreenSpace - 990 + fadeOutDistance) / fadeOutDistance), 1.5);
+            let masterOpacity = xWorldSpace >= 0 ? 1 : 0;
+
+            // Don't draw turbo-tiny ticks.
+            if (tickSizeCategory > 0.05) {
+                const tick = tickReserves[ticksConsumed];
+                tick.attr("opacity", masterOpacity * rightFadeOpacity).attr("x1", tickXScreenSpace).attr("x2", tickXScreenSpace);
+                tick.attr("stroke-width", 1 + tickSizeCategory * 1.5);
+                tick.attr("y2", 10 * Math.pow(tickSizeCategory, 0.75));
+                ticksConsumed++;
+            }
+
+            if (textSizeCategory > 1.3) {
+                const text = textReserves[textConsumed++];
+                const textOpacity = clamp(textSizeCategory - 1.3);
+                const textValue = renderNumber(params.scale, xWorldSpace);
+                if (text !== undefined)
+                    text.text(textValue)
+                        .attr("opacity",
+                            masterOpacity *
+                            (textValue === "0" ? 1 : leftFadeOpacity) *
+                            rightFadeOpacity *
+                            textOpacity
+                        )
+                        .attr("x", tickXScreenSpace).attr("y", 55);
+            }
+
+            xWorldSpace += smallestTickSpacingWorldSpace;
+            tickIndex++;
+        }
+        while (ticksConsumed < tickReserves.length)
+            tickReserves[ticksConsumed++].attr("opacity", 0);
+        while (textConsumed < textReserves.length)
+            textReserves[textConsumed++].attr("opacity", 0);
+        window.requestAnimationFrame(moveAxes);
+    };
+    window.requestAnimationFrame(moveAxes);
+
+    function shiftAxisScale(left, scale, duration) {
+        proxyParameterObject.transition()
+            .duration(duration)
+            .attr("x", left)
+            .attr("y", Math.log(scale));
+        return sleep(duration);
+    }
+
+    debugPoint();
+
+    await nextSlide();
+    const demoBoardGroup = root.append("g");
+    for (let i = 0; i < 10; i++) {
+        + (i % 2 === 0 ? 0 : 120)
+        makeBoard(220 + 140 * i, -170, 0.3, axisGroup, 0.4, true, exampleSquidLayouts[i]);
+        await sleep(100);
+    }
+
+    await nextSlide();
+    shiftAxisScale(0, 8000, 10000);
+
+    await nextSlide();
+    shiftAxisScale(4.5e6, 2000, 5000);
+
+    await nextSlide();
+    shiftAxisScale(4.6474e6, 37, 10000);
+
+    await nextSlide();
 }
 
 async function showPDFs(root) {
@@ -1199,7 +1356,7 @@ async function showPDFs(root) {
     globalViewBox = viewBox;
 
     var startTimestamp = null;
-    smoothGameClipMotion = (timestamp) => {
+    smoothGameClipMotion = timestamp => {
         if (startTimestamp === null)
             startTimestamp = timestamp;
         const elapsed = timestamp - startTimestamp;
@@ -1325,8 +1482,6 @@ async function showPDFs(root) {
         .transition()
         .duration(500)
         .attr("fill-opacity", 1);
-
-    //debugPoint(50);
 
     // Draw a bell curve.
     await nextSlide();
@@ -1482,8 +1637,6 @@ async function showPDFs(root) {
             .duration(1000)
             .attr("opacity", 0);
 
-    //debugPoint();
-
     // Make the new curve.
     await nextSlide();
     pathData = [];
@@ -1501,8 +1654,6 @@ async function showPDFs(root) {
     bellCurvePath.transition()
         .duration(1000)
         .attr("d", pathFunction(pathData));
-
-    //debugPoint();
 
     // Emphasize the curve.
     await nextSlide();
@@ -1565,7 +1716,7 @@ async function doSlide(slideFn) {
 
 async function main() {
     //globalTimeScale = 0.3;
-    debugPoint();
+    //debugPoint();
     //await doSlide(showBoardAveraging);
     //await doSlide(showBoardSequence);
     //await doSlide(showRNGSequence);
@@ -1592,7 +1743,10 @@ function debugPoint(timeScale) {
     //return nextSlide();
 }
 
+const keysHeld = new Set();
+
 function globalShortcutsHandler(evt) {
+    keysHeld.add(evt.key);
     if (evt.key === " ") {
         if (globalNextSlideContinuation !== null) {
             document.getElementById("messageBox").innerText = "";
@@ -1632,6 +1786,9 @@ function globalShortcutsHandler(evt) {
 }
 
 document.addEventListener("keydown", globalShortcutsHandler);
+document.addEventListener("keyup", function(evt) {
+    keysHeld.delete(evt.key);
+});
 
 main();
 
