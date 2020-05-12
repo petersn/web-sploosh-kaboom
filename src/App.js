@@ -459,7 +459,7 @@ class BoardTimer extends React.Component {
         // I did some linear regressions from real HD Italian runs. I'll put some data up at some point.
         let prediction = 156 + 252 * timeDeltaSeconds;
         if (this.state.includesLoadingTheRoom)
-            prediction += -940;
+            prediction += -940 + Number(this.props.roomEnteredOffset);
         prediction += this.state.includedRewardsGotten * 760;
         return Math.round(prediction);
     }
@@ -467,7 +467,10 @@ class BoardTimer extends React.Component {
     render() {
         const elapsed = this.getSecondsElapsed();
         if (this.state.invalidated)
-            return <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>&nbsp; - INVALIDATED</span>;
+            return <>
+                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>TIMER</span>
+                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>INVALIDATED</span>
+            </>;
         return <>
             <span>&nbsp;Seconds elapsed: </span>
             <span>&nbsp;{elapsed.toFixed(2)}&nbsp;</span>
@@ -550,6 +553,7 @@ class MainMap extends React.Component {
             squidLayout,
             grid: this.makeEmptyGrid(),
             squidsGotten: 'unknown',
+            undoBuffer: [],
             probs,
             best: [3, 3],
             valid: true,
@@ -571,6 +575,7 @@ class MainMap extends React.Component {
             nextBoardStepsThousands: 7,
             nextBoardStepsThousandsStdDev: 3,
             timedBoardStepsThousandsStdDev: 0.2,
+            roomEnteredOffset: 0,
         };
     }
 
@@ -1112,8 +1117,10 @@ class MainMap extends React.Component {
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     probs[[x, y]] = probabilities[8 * y + x];
-                    if (grid[[x, y]] === null && probabilities[8 * y + x] > highestProb) {
-                        highestProb = probabilities[8 * y + x];
+                    const distanceScaling = 1.0;
+                    const distanceAdjustedProb = probabilities[8 * y + x] * distanceScaling;
+                    if (grid[[x, y]] === null && distanceAdjustedProb > highestProb) {
+                        highestProb = distanceAdjustedProb;
                         maxX = x;
                         maxY = y;
                     }
@@ -1128,10 +1135,18 @@ class MainMap extends React.Component {
         this.setState({lastComputationTime: t1 - t0});
     }
 
+    copyToUndoBuffer() {
+        this.setState({undoBuffer: [
+            ...this.state.undoBuffer,
+            {grid: this.state.grid, squidsGotten: this.state.squidsGotten},
+        ]});
+    }
+
     onClick(x, y, setAsHit) {
         const grid = { ...this.state.grid };
         let gridValue = grid[[x, y]];
         let squidsGotten = this.state.squidsGotten;
+        this.copyToUndoBuffer();
 
         if (this.state.mode === 'calculator') {
             switch (gridValue) {
@@ -1190,6 +1205,15 @@ class MainMap extends React.Component {
         this.doComputation(newState.grid, newState.squidsGotten);
     }
 
+    undoLastMarking() {
+        const undoBuffer = [...this.state.undoBuffer];
+        if (undoBuffer.length === 0)
+            return;
+        const undoEntry = undoBuffer.pop();
+        this.setState({grid: undoEntry.grid, squidsGotten: undoEntry.squidsGotten, undoBuffer});
+        this.doComputation(undoEntry.grid, undoEntry.squidsGotten);
+    }
+
     reportMiss() {
         if (this.state.best !== null && this.state.grid[this.state.best] === null)
             this.onClick(...this.state.best);
@@ -1241,6 +1265,7 @@ class MainMap extends React.Component {
                 numericValue = 3;
             }
         }
+        this.copyToUndoBuffer();
         this.setState({grid, squidsGotten: '' + numericValue});
         this.doComputation(grid, '' + numericValue);
     }
@@ -1336,16 +1361,16 @@ class MainMap extends React.Component {
             margin: '20px',
             color: 'white',
         }}>
-            <div class="container">
+            <div className="container">
                 <div style={{justifySelf: "end", alignSelf: "start"}}>
-                    <div class="tableContainer" style={{gridTemplateColumns: "repeat(2, 1fr)"}}>
+                    <div className="tableContainer" style={{gridTemplateColumns: "repeat(2, 1fr)"}}>
                         <span><strong>&nbsp;Item&nbsp;</strong></span>
                         <span><strong>&nbsp;Value&nbsp;</strong></span>
                         <span>&nbsp;Shots used:&nbsp;</span>
                         <span>&nbsp;{usedShots}&nbsp;</span>
                     {this.state.turboBlurboMode && this.state.turboBlurboTiming && 
                     <>
-                        <BoardTimer ref={this.timerRef} />
+                        <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} />
                         <span>&nbsp;Last steps:&nbsp;</span>
                         <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
                     </>
@@ -1399,7 +1424,7 @@ class MainMap extends React.Component {
                 </span>
                 */}
             </div>
-            <br />
+            <br/>
             {
                 this.state.turboBlurboMode &&
                 <>
@@ -1455,12 +1480,13 @@ class MainMap extends React.Component {
                     )}
                 </div>
                 <div style={{color: 'white', fontSize: '130%'}}>
-                    Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps):<br/>
-                    First board mean:   <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
-                    First board stddev: <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Next board mean:    <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
-                    Next board stddev:  <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Timed board stddev: <input style={{width: '50px'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
+                    Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):<br/>
+                    First board mean:    <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
+                    First board stddev:  <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Next board mean:     <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
+                    Next board stddev:   <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Timed board stddev:  <input style={{width: '50px'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>&nbsp;
+                    Room entered offset: <input style={{width: '50px'}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
                 </div>
                 <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '1px solid white', width: '400px', minHeight: '20px', display: 'inline-block'}}>
                     {this.state.potentialMatches.map((match, i) => {
@@ -1520,7 +1546,9 @@ function globalShortcutsHandler(evt) {
         globalMap.toggleVideoProcessing();
 
     // Add z or y for German keyboard support.
-    if ((evt.key === 'z' || evt.key === 'y')  && globalMap !== null)
+    if (evt.key === 'z' && evt.ctrlKey)
+        globalMap.undoLastMarking();
+    else if ((evt.key === 'z' || evt.key === 'y')  && globalMap !== null)
         globalMap.reportMiss();
     if (evt.key === 'x' && globalMap !== null)
         globalMap.reportHit();
@@ -1576,7 +1604,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.15)</span><br/>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.16)</span><br/>
             <span style={{ color: 'white' }}><a href="https://github.com/petersn/web-sploosh-kaboom">GitHub Repository</a></span>
         </div>;
     }

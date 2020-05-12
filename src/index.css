@@ -14,7 +14,7 @@ code {
 
 th, td, tr, table{
   text-align: left;
-  border: 2px solid black;
+  border: 2px solid #aaa;
   border-collapse: collapse;
 }
 
@@ -25,12 +25,12 @@ th, td, tr, table{
 
 .tableContainer {
   display: grid;
-  border-top: 2px solid black;
-  border-right: 2px solid black;
+  border-top: 2px solid #aaa;
+  border-right: 2px solid #aaa;
 }
 
 .tableContainer > span {
   padding: 8px 4px;
-  border-left: 2px solid black;
-  border-bottom: 2px solid black;
+  border-left: 2px solid #aaa;
+  border-bottom: 2px solid #aaa;
 }
