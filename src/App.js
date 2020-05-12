@@ -485,6 +485,10 @@ class BoardTimer extends React.Component {
     }
 }
 
+function computeL1Distance(p1, p2) {
+    return Math.abs(p1[0] - p2[0]) + Math.abs(p1[1] - p2[1]);
+}
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -556,6 +560,7 @@ class MainMap extends React.Component {
             undoBuffer: [],
             probs,
             best: [3, 3],
+            cursorBelief: [3, 3],
             valid: true,
             observationProb: 1.0,
             screenRecordingActive: false,
@@ -1110,15 +1115,15 @@ class MainMap extends React.Component {
             let highestProb = -1;
             let probs = [];
 
-            // Here we implement our Manhattan distance bonus heuristic.
+            // Here we implement our L1 distance bonus heuristic.
             // The idea is that we want to highlight a square that isn't too far from where
             // the player last adjusted the board. (i.e. where we believe their cursor is.)
-
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     probs[[x, y]] = probabilities[8 * y + x];
-                    const distanceScaling = 1.0;
-                    const distanceAdjustedProb = probabilities[8 * y + x] * distanceScaling;
+                    const l1Distance = computeL1Distance(this.state.cursorBelief, [x, y]);
+                    const distancePenaltyMultiplier = 1 - 0.03 * l1Distance;
+                    const distanceAdjustedProb = probabilities[8 * y + x] * distancePenaltyMultiplier;
                     if (grid[[x, y]] === null && distanceAdjustedProb > highestProb) {
                         highestProb = distanceAdjustedProb;
                         maxX = x;
@@ -1138,7 +1143,7 @@ class MainMap extends React.Component {
     copyToUndoBuffer() {
         this.setState({undoBuffer: [
             ...this.state.undoBuffer,
-            {grid: this.state.grid, squidsGotten: this.state.squidsGotten},
+            {grid: this.state.grid, squidsGotten: this.state.squidsGotten, cursorBelief: this.state.cursorBelief},
         ]});
     }
 
@@ -1189,14 +1194,14 @@ class MainMap extends React.Component {
             }
             this.setState({ squidsGotten });
         }
-        this.setState({ grid });
+        this.setState({grid, cursorBelief: [x, y]});
         this.doComputation(grid, squidsGotten);
     }
 
     clearField() {
         const templateState = this.makeEmptyState();
         const newState = {};
-        for (const name of ['squidLayout', 'grid', 'squidsGotten'])
+        for (const name of ['squidLayout', 'grid', 'squidsGotten', 'undoBuffer', 'cursorBelief'])
             newState[name] = templateState[name];
         // The squidsGotten value of 'unknown' is banned in turbo blurbo mode.
         if (this.state.turboBlurboMode)
@@ -1210,7 +1215,7 @@ class MainMap extends React.Component {
         if (undoBuffer.length === 0)
             return;
         const undoEntry = undoBuffer.pop();
-        this.setState({grid: undoEntry.grid, squidsGotten: undoEntry.squidsGotten, undoBuffer});
+        this.setState({grid: undoEntry.grid, squidsGotten: undoEntry.squidsGotten, cursorBelief: undoEntry.cursorBelief, undoBuffer});
         this.doComputation(undoEntry.grid, undoEntry.squidsGotten);
     }
 
@@ -1250,6 +1255,7 @@ class MainMap extends React.Component {
     }
 
     async incrementKills() {
+        this.copyToUndoBuffer();
         let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
         let grid = this.state.grid;
         numericValue++;
@@ -1261,11 +1267,12 @@ class MainMap extends React.Component {
             if (success) {
                 numericValue = 0;
                 grid = this.makeEmptyGrid();
+                // FIXME: Make us able to undo across completions.
+                this.setState({undoBuffer: [], cursorBelief: [3, 3]});
             } else {
                 numericValue = 3;
             }
         }
-        this.copyToUndoBuffer();
         this.setState({grid, squidsGotten: '' + numericValue});
         this.doComputation(grid, '' + numericValue);
     }
