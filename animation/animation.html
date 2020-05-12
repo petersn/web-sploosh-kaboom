@@ -1210,7 +1210,11 @@ async function showFirstBoardProgression(root) {
 
     var startTimestamp = null;
     var prevParams = null;
+    var pleaseUpdateTheBellCurve = false;
+    var pleaseExit = false;
     const moveAxes = timestamp => {
+        if (pleaseExit)
+            return;
         window.requestAnimationFrame(moveAxes);
 
         if (startTimestamp === null)
@@ -1309,17 +1313,16 @@ async function showFirstBoardProgression(root) {
             textReserves[textConsumed++].attr("opacity", 0);
 
         // Update the curve, if relevant.
-        /*
-        if (bellCurvePath !== null) {
-            const pathData = [];
-            for (let i = 0; i < 500; i++) {
+        if (bellCurvePath !== null && pleaseUpdateTheBellCurve) {
+            const pathData = [0];
+            for (let i = 1; i < 499; i++) {
                 const wsx = params.left + 1000 * params.scale * (i / 500);
                 const x = (5.5e6 - wsx) / 100e3;
                 pathData.push(300 * Math.exp(-x*x));
             }
+            pathData.push(0);
             bellCurvePath.attr("d", pathFunction(pathData));
         }
-        */
     };
     window.requestAnimationFrame(moveAxes);
 
@@ -1408,7 +1411,6 @@ async function showFirstBoardProgression(root) {
 
     // Average together the boards under the curve.
     await nextSlide();
-    const overlays = [];
     const overlayCells = [];
     let boardCounter = 0;
     const timeScale = 1;
@@ -1471,22 +1473,65 @@ async function showFirstBoardProgression(root) {
 
     // Hide all the nonsense we were just looking at.
     await nextSlide();
+    /*
     demoBoardGroup.attr("opacity", 1);
     demoBoardGroup.transition()
         .duration(1000)
         .attr("opacity", 0);
+    */
+    for (const b of demoBoards) {
+        b.root.attr("opacity", 1);
+        b.root.transition()
+            .duration(1000)
+            .attr("opacity", 0);
+    }
     await sleep(1000);
-    demoBoardGroup.remove();
+    for (const b of demoBoards)
+        b.root.remove();
+    //demoBoardGroup.remove();
+    // Clear out the path.
+    pathData = [];
+    for (let i = 0; i < 500; i++)
+        pathData.push(0);
+    bellCurvePath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData))
+    await sleep(1000);
+    // Switch the bell curve over to per-frame control by our animation loop.
+    // This also requires us to disable the line dashing.
+    pleaseUpdateTheBellCurve = true;
+    bellCurvePath.attr("stroke-dasharray", "");
 
     await nextSlide();
-    shiftAxisScale(0, 8000, 10000);
+    await shiftAxisScale(0, 8000, 10000);
 
     await nextSlide();
-    shiftAxisScale(4.5e6, 2000, 5000);
+    await shiftAxisScale(4.5e6, 2000, 5000);
+    await shiftAxisScale(5.1e6, 700, 5000);
 
+    // Show how we just get mush.
     await nextSlide();
-    shiftAxisScale(4.6474e6, 37, 10000);
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        const mush = {"0,0": 0.0673, "1,0": 0.0991, "2,0": 0.1225, "3,0": 0.1360,
+                                     "1,1": 0.1277, "2,1": 0.1489, "3,1": 0.1611,
+                                                    "2,2": 0.1686, "3,2": 0.1800,
+                                                                   "3,3": 0.1913};
+        for (const flip of [false, true]) {
+            for (let _x of [x, 7 - x]) {
+                for (let _y of [y, 7 - y]) {
+                    const pair = flip ? [_y, _x] : [_x, _y];
+                    if (pair in mush)
+                        return mush[pair];
+                }
+            }
+        }
+    }, true, timeScale);
 
+    //await nextSlide();
+    //shiftAxisScale(4.6474e6, 37, 10000);
+
+    // Kill the animation frame loop.
+    pleaseExit = true;
     await nextSlide();
 }
 
@@ -1587,15 +1632,15 @@ async function showPDFs(root) {
     window.requestAnimationFrame(smoothGameClipMotion);
     //videoElem.play();
 
-    // Slide the viewbox into the top right.
-    await nextSlide();
+    // Slide the viewbox slightly up to accomodate the timeline.
+    await nextSlide("Move Linkus up.");
     globalViewBox.transition()
         .duration(1500)
         .attr("x", 1920 * (0.05 + 0.9 * 0.1)).attr("y", 1080 * 0.05)
         .attr("width", 1920 * 0.9 * 0.8).attr("height", 1080 * 0.9 * 0.8);
 
     // Draw the main timeline.
-    await nextSlide();
+    await nextSlide("Create the timeline.");
     const timelineGroup = root.append("g");
     timelineGroup.attr("transform", d3Transform().scale(1.4).translate([50, 730]));
     //fadeIn(makeExtendoLine(0, -15, 0, 15, timelineGroup)[0]);
@@ -1690,7 +1735,7 @@ async function showPDFs(root) {
     fadeIn(makeExtendoArrow(230, 0, 1240, 0, timelineGroup)[0]);
     await addTimelineEvent(190 + 60, ["First 29 min of run"], -60, 80 + 60, 80 - 60);
 
-    await nextSlide();
+    await nextSlide("Add the now cursor.");
     const nowIndicator = timelineGroup.append("path")
         .attr("d", "M 0 2 L 15 30 L -15 30 Z")
         .attr("fill", "red").attr("stroke-width", 2).attr("stroke", "black")
@@ -1718,42 +1763,42 @@ async function showPDFs(root) {
     }
 
     // Skip the time indicator over the ellipsis.
-    await nextSlide();
+    await nextSlide("Move the time indicator up to to the 29m mark.");
     await setTimeIndicator(150);
     await setTimeIndicator(230 + 20);
 
     // Advance the video until Linkus is at the door.
-    await nextSlide();
+    await nextSlide("Advance time until Linkus enters SK.");
     playGameVideo();
     await advanceTimeIndicator(8700);
     pauseGameVideo();
 
     // Label the door opening on the timeline.
-    await nextSlide();
+    await nextSlide("Label the first board being generated on the timeline.");
     addTimelineEvent(getTimelineIndicatorX(), ["Enter SK room", "First board generated"], 70, 20, 160);
 
     // Advance the video until Linkus is right before finishing the first board.
-    await nextSlide();
+    await nextSlide("Advance until Linkus is done playing the first board.");
     fastForwardGameVideo();
     await advanceTimeIndicator(10100, 3);
     pauseGameVideo();
 
     // Label the first board being completed on the timeline.
-    await nextSlide();
+    await nextSlide("Label the first board being completed on the timeline.");
     addTimelineEvent(getTimelineIndicatorX(), ["Finish first board", "Second board generated"], 20, 80, 120);
 
     // Advance the video until Linkus is playing the second board.
-    await nextSlide();
+    await nextSlide("Advance the video until Linkus is playing the second board.");
     playGameVideo();
     await advanceTimeIndicator(5600);
     pauseGameVideo();
 
     // Move the video to the top right corner.
-    await nextSlide();
+    await nextSlide("Make Linkus small.");
     toggleViewBoxSizing();
 
     // Make the axis arrows pop in.
-    await nextSlide();
+    await nextSlide("Make the axis arrows pop in.");
     const axisGroup = root.append("g");
     //axisGroup.attr("transform", d3Transform().scale(1.5).translate([135, 600]));
     axisGroup.attr("transform", d3Transform().scale(1.4).translate([100, 570]));
@@ -1831,7 +1876,7 @@ async function showPDFs(root) {
     }
 
     // Draw the mean RNG step count estimate dashed line.
-    await nextSlide();
+    await nextSlide("Show the 5.5M mean.");
     const meanX = 20 + 25 * 19;
     const meanSpot = axisGroup.append("line")
         .attr("x1", meanX).attr("y1", -400).attr("x2", meanX).attr("y2", -400)
@@ -1854,11 +1899,11 @@ async function showPDFs(root) {
         .attr("fill-opacity", 1);
 
     // Emphasize the region on the timeline up to the first game.
-    await nextSlide();
+    await nextSlide("Emphasize (game start) <-> (enter sk room) region.");
     await emphasizeTimelineRegion("Game start", "Enter SK room");
 
     // Draw a bell curve.
-    await nextSlide();
+    await nextSlide("Draw a bell curve");
     const bellCurveGroup = axisGroup.append("g"); // I want this just to animate opacity separately.
     let pathData = [];
     for (let i = 0; i < 500; i++) {
@@ -1889,7 +1934,7 @@ async function showPDFs(root) {
         .attr("fill-opacity", 0.2);
 
     // Show the squid layout that the player has seen in-game, and we narrow down based on.
-    await nextSlide();
+    await nextSlide("Show the first board.");
     const firstBoardGroup = axisGroup.append("g");
     const firstBoard = await makeBoard(240, -330, 0.6, firstBoardGroup, 0.6, true, [
         {x: 5, y: 5, horizontal: true},
@@ -1906,7 +1951,7 @@ async function showPDFs(root) {
             .attr("opacity", 1);
 
     // Show the spots where we saw this board.
-    await nextSlide();
+    await nextSlide("Show the RNG spots matching the first board.");
     // Simultaneously, make the 5.5M mean spot dashed line a little opaque.
     meanSpot.transition()
         .duration(1000)
@@ -1937,7 +1982,7 @@ async function showPDFs(root) {
     const disregard2 = drawExtendoPath(176, -295, 821, -54);
 
     // Disregard the far away matches.
-    await nextSlide();
+    await nextSlide("Disregard the far matches.");
     const rejectX1 = drawX(axisGroup, 127, -40, 25, "red");
     disregard1.transition()
         .duration(1000)
@@ -1950,7 +1995,7 @@ async function showPDFs(root) {
 
     // Get the probabilities of our matches.
     // 31.6% for the low one - 68.4% for the high one
-    await nextSlide();
+    await nextSlide("Add probability flags.");
     async function getProbLine(parent, x, height, xOff, bottomLabel, label, textDeltaSize) {
         textDeltaSize = textDeltaSize === undefined ? 50 : textDeltaSize;
         const l = parent.append("line")
@@ -2013,11 +2058,11 @@ async function showPDFs(root) {
             .attr("opacity", 0);
 
     // Show the viewer the period of time we care about for estimating the spike offset.
-    await nextSlide();
+    await nextSlide("Mark the timeline for the first board completing.");
     await emphasizeTimelineRegion("First board generated", "Second board generated");
 
     // Update the curve to reflect our new posterior.
-    await nextSlide();
+    await nextSlide("Update the curve to be two spikes for the second board.");
     function setNewKnowledgeValues(gaussians) {
         const pathData = [];
         for (let i = 0; i < 500; i++) {
@@ -2041,17 +2086,17 @@ async function showPDFs(root) {
     ]);
 
     // Show the dependence on how long we took.
-    await nextSlide();
+    await nextSlide("Shift the curve ->");
     bellCurvePath.transition()
         .duration(1000)
         .attr("transform", d3Transform().translate([40, -20]));
-    await nextSlide();
+    await nextSlide("Shift the curve <-");
     bellCurvePath.transition()
         .duration(1000)
         .attr("transform", d3Transform().translate([20, -20]));
 
     // Make the video large.
-    await nextSlide();
+    await nextSlide("Make the video large.");
     axisGroup.attr("opacity", 1);
     axisGroup.transition()
         .duration(1000)
@@ -2059,13 +2104,13 @@ async function showPDFs(root) {
     toggleViewBoxSizing();
 
     // Advance the video until Linkus is about to beat the second game.
-    await nextSlide();
+    await nextSlide("Fast forward through the second game.");
     fastForwardGameVideo();
     await advanceTimeIndicator(29500 / 3, 3);
     pauseGameVideo();
 
     // Make the video small again.
-    await nextSlide();
+    await nextSlide("Make the video small.");
     toggleViewBoxSizing();
     await sleep(1000);
     axisGroup.transition()
@@ -2073,11 +2118,11 @@ async function showPDFs(root) {
         .attr("opacity", 1);
 
     // Label the door opening on the timeline.
-    await nextSlide();
+    await nextSlide("Mark the timeline with the second board.");
     addTimelineEvent(getTimelineIndicatorX(), ["Finish second board", "Third board generated"], 0, 100, 100);
 
     // Show the second board, which we now infer.
-    await nextSlide();
+    await nextSlide("Hide the first board, and show the second board.");
     firstBoardGroup.attr("opacity", 1);
     firstBoardGroup.transition()
         .duration(1000)
@@ -2106,7 +2151,7 @@ async function showPDFs(root) {
             .attr("opacity", 1);
 
     // Show arrows animating out of second board.
-    await nextSlide();
+    await nextSlide("Show possible RNG step counts for the third board");
     const secondDisregard1 = drawExtendoPath(176, -295, 100, -54);
     await sleep(200);
     const secondRegard1    = drawExtendoPath(176, -295, 580, -54);
@@ -2114,7 +2159,7 @@ async function showPDFs(root) {
     const secondDisregard2 = drawExtendoPath(176, -295, 890, -54);
 
     // Disregard the far away matches.
-    await nextSlide();
+    await nextSlide("Disregard far away matches.");
     const secondRejectX1 = drawX(axisGroup, 100, -40, 25, "red");
     secondDisregard1.transition()
         .duration(1000)
@@ -2133,7 +2178,7 @@ async function showPDFs(root) {
             .attr("opacity", 0);
 
     // Create the new probability flags.
-    await nextSlide();
+    await nextSlide("Create the new probability flags.");
     originalProbFlags.attr("opacity", 1);
     originalProbFlags.transition()
         .duration(1000)
@@ -2149,24 +2194,31 @@ async function showPDFs(root) {
         .attr("opacity", 0);
 
     // Show the final interval we're estimating based off of.
-    await nextSlide();
+    await nextSlide("Emphasize the 2 <-> 3 time.");
     await emphasizeTimelineRegion("Second board generated", "Third board generated");
 
     // Show our third board probability distribution.
-    await nextSlide();
+    await nextSlide("Update the curve to be a spike for the third board.");
     setNewKnowledgeValues([
         {mean: 296 + 13, width: 3, height: 1.000 * 380.42069},
     ]);
 
+    // Make the thing big.
+    await nextSlide("Make the video big.");
+    axisGroup.transition()
+        .duration(1000)
+        .attr("opacity", 0.2);
+    toggleViewBoxSizing();
+
     // Let the game keep playing.
-    await nextSlide();
+    await nextSlide("Continue the video.");
     fastForwardGameVideo();
     // Cheat a little bit here... this speed should be 3.0, but we compress it for aesthetics.
-    await advanceTimeIndicator(42000 / 3, 1.92);
+    await advanceTimeIndicator(43000 / 3, 1.91);
     pauseGameVideo();
     addTimelineEvent(getTimelineIndicatorX(), ["We win!"], -20, 50, 10);
 
-    await nextSlide();
+    await nextSlide("Done!");
     // Fade out the video.
     startVideoFadeout = true;
 }
@@ -2184,21 +2236,22 @@ async function doSlide(slideFn) {
 }
 
 async function main() {
-    //debugPoint();
-    //globalTimeScale = 0.1;
-    //await doSlide(showBoardAveraging);
-    //await doSlide(showRNGSequence);
-    //await doSlide(showBoardSampling);
     debugPoint();
+    //globalTimeScale = 0.1;
+    await doSlide(showBoardAveraging);
+    await doSlide(showRNGSequence);
+    await doSlide(showBoardSampling);
     await doSlide(showFirstBoardProgression);
-    //await doSlide(showBoardSequence);
     await doSlide(showPDFs);
 }
+
+//await doSlide(showBoardSequence);
 
 var globalNextSlideContinuation = null;
 var fastSlideFlag = false;
 
-function nextSlide() {
+function nextSlide(notes) {
+    notes = notes === undefined ? "" : notes;
     if (skipThrough)
         return sleep(1500);
     if (fastSlideFlag) {
@@ -2207,7 +2260,7 @@ function nextSlide() {
     }
     return new Promise(resolve => {
         globalNextSlideContinuation = resolve;
-        document.getElementById("messageBox").innerText = "Press space to advance, n to zoom to next pause...";
+        document.getElementById("messageBox").innerText = "Press space to advance, n to zoom to next pause...\n" + notes;
     });
     return promise;
 }
