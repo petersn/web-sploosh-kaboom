@@ -1357,12 +1357,14 @@ async function showFirstBoardProgression(root) {
         .transition()
         .duration(4000)
         .attr("transform", d3Transform().scale(8).translate([-300, +15]));
+    await sleep(5500);
 
     // Zoom back out to the default camera position.
     await nextSlide();
     axisGroup.transition()
         .duration(2000)
         .attr("transform", d3Transform().scale(1.5).translate([135, 570]));
+    await sleep(2000);
 
     // Show an example distribution over boards.
     await nextSlide();
@@ -2058,7 +2060,7 @@ async function showPDFs(root) {
             .attr("opacity", 0);
 
     // Show the viewer the period of time we care about for estimating the spike offset.
-    await nextSlide("Mark the timeline for the first board completing.");
+    await nextSlide("Highlight the region between the first and second boards generating.");
     await emphasizeTimelineRegion("First board generated", "Second board generated");
 
     // Update the curve to reflect our new posterior.
@@ -2236,8 +2238,9 @@ async function doSlide(slideFn) {
 }
 
 async function main() {
-    debugPoint();
-    //globalTimeScale = 0.1;
+    //debugPoint();
+    globalTimeScale = 0.6;
+    await nextSlide("Begin the presentation.");
     await doSlide(showBoardAveraging);
     await doSlide(showRNGSequence);
     await doSlide(showBoardSampling);
@@ -2331,7 +2334,7 @@ document.addEventListener("keyup", function(evt) {
     keysHeld.delete(evt.key);
 });
 
-main();
+//main();
 
 /*
     // Emphasize the curve.

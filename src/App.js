@@ -27,6 +27,7 @@ indexedDBreq.onupgradeneeded = function(event) {
 }
 
 // TODO: Am I using IndexedDB even remotely correctly!? This looks so weird...
+// Do I not have to somehow end or commit the transactions!?
 
 function dbWrite(key, value) {
     if (globalDB === null)
@@ -1096,6 +1097,10 @@ class MainMap extends React.Component {
             let highestProb = -1;
             let probs = [];
 
+            // Here we implement our Manhattan distance bonus heuristic.
+            // The idea is that we want to highlight a square that isn't too far from where
+            // the player last adjusted the board. (i.e. where we believe their cursor is.)
+
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     probs[[x, y]] = probabilities[8 * y + x];
@@ -1546,7 +1551,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.15)</span>
         </div>;
     }
 }
