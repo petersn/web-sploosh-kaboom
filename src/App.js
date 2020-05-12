@@ -338,6 +338,9 @@ class LayoutDrawingBoard extends React.Component {
     render() {
         const layoutString = this.getLayoutString();
         let boardIndex = this.props.parent.boardIndices[layoutString];
+        if (boardIndex === undefined) {
+            boardIndex = "waiting...";
+        }
         const isSelectedCell = (x, y) => this.state.selectedCell !== null && x === this.state.selectedCell[0] && y === this.state.selectedCell[1];
 
         return <div style={{
@@ -464,13 +467,17 @@ class BoardTimer extends React.Component {
         const elapsed = this.getSecondsElapsed();
         if (this.state.invalidated)
             return <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>&nbsp; - INVALIDATED</span>;
-        return <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
-            &nbsp;- Seconds elapsed: {elapsed.toFixed(2)}
-            &nbsp;- Steps: {this.guessStepsElapsedFromTime(elapsed)}
-            &nbsp;- Entered room: {renderYesNo(this.state.includesLoadingTheRoom)}
-            &nbsp;- Rewards gotten: {this.state.includedRewardsGotten}
-            {/* &nbsp;- Rupees collected: {renderYesNo(this.state.rupeesCollected)} */}
-        </span>;
+        return <>
+            <span>&nbsp;Seconds elapsed: </span>
+            <span>&nbsp;{elapsed.toFixed(2)}&nbsp;</span>
+            <span>&nbsp;Steps:&nbsp;</span>
+            <span>&nbsp;{this.guessStepsElapsedFromTime(elapsed)}&nbsp;</span>
+            <span>&nbsp;Entered room:</span>
+            <span>&nbsp;{renderYesNo(this.state.includesLoadingTheRoom)}&nbsp;</span>
+            <span>&nbsp;Rewards gotten:&nbsp;</span>
+            <span>&nbsp;{this.state.includedRewardsGotten}&nbsp;</span>
+        </>;
+            {/* &nbsp;- Rupees collected: {renderYesNo(this.state.rupeesCollected)} */};
     }
 }
 
@@ -553,6 +560,7 @@ class MainMap extends React.Component {
 
             turboBlurboMode: false,
             turboBlurboTiming: false,
+            showKeyShortcuts: false,
 
             timerStepEstimate: null,
 
@@ -1268,7 +1276,7 @@ class MainMap extends React.Component {
     }
 
     renderActualMap(overlayMode) {
-        return <div style={{display: 'inline-block'}}>
+        return <div style={{justifySelf: 'center'}}>
             {naturalsUpTo(8).map(
                 (y) => <div key={y} style={{
                     display: 'flex',
@@ -1323,23 +1331,40 @@ class MainMap extends React.Component {
             margin: '20px',
             color: 'white',
         }}>
-            <div>
-                {
-                    this.state.turboBlurboMode && this.state.turboBlurboTiming && <div style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
-                        (space) toggle timer &nbsp;&nbsp; (,) add reward &nbsp;&nbsp; (&lt;) remove reward &nbsp;&nbsp; (m) toggle room &nbsp;&nbsp; (;) invalidate &nbsp;&nbsp; (:) reset timer
-                    </div>
-                }
-                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>Shots used: {usedShots}</span>
-                {
-                    this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+            <div class="container">
+                <div style={{justifySelf: "end", alignSelf: "start"}}>
+                    <div class="tableContainer" style={{gridTemplateColumns: "repeat(2, 1fr)"}}>
+                        <span><strong>&nbsp;Item&nbsp;</strong></span>
+                        <span><strong>&nbsp;Value&nbsp;</strong></span>
+                        <span>&nbsp;Shots used:&nbsp;</span>
+                        <span>&nbsp;{usedShots}&nbsp;</span>
+                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && 
+                    <>
                         <BoardTimer ref={this.timerRef} />
-                        <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>
-                            &nbsp; Last steps: {this.state.timerStepEstimate === null ? '~' : this.state.timerStepEstimate}
-                        </span>
+                        <span>&nbsp;Last steps:&nbsp;</span>
+                        <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
                     </>
-                }
-            </div>
+                    }
+                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && this.state.showKeyShortcuts &&
+                    <>
+                        <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
+                        <span>&nbsp;Toggle Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
+                        <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
+                        <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;&lt;&nbsp;</span>
+                        <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
+                        <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
+                        <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
+                        <span>&nbsp;Split Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
+                    </>
+                    }
+                    </div>
+                    {this.state.turboBlurboMode && this.state.turboBlurboTiming &&
+                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button>
+                    }
+                </div>
             {this.state.doVideoProcessing || this.renderActualMap(false)}
+            <span style={{display: "inline-block"}}></span>
+            </div>
             {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
@@ -1546,7 +1571,8 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.14)</span><br/>
+            <span style={{ color: 'white' }}><a href="https://github.com/petersn/web-sploosh-kaboom">GitHub Repository</a></span>
         </div>;
     }
 }

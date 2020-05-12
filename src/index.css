@@ -11,3 +11,26 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+th, td, tr, table{
+  text-align: left;
+  border: 2px solid black;
+  border-collapse: collapse;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+}
+
+.tableContainer {
+  display: grid;
+  border-top: 2px solid black;
+  border-right: 2px solid black;
+}
+
+.tableContainer > span {
+  padding: 8px 4px;
+  border-left: 2px solid black;
+  border-bottom: 2px solid black;
+}
