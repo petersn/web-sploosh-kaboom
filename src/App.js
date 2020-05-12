@@ -1611,7 +1611,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.16)</span><br/>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.17)</span><br/>
             <span style={{ color: 'white' }}><a href="https://github.com/petersn/web-sploosh-kaboom">GitHub Repository</a></span>
         </div>;
     }
