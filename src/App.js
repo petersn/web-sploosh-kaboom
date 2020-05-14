@@ -350,7 +350,7 @@ class SpywareModeConfiguration extends React.Component {
                     </div>
                 }>
                     Token: <input data-stop-shortcuts style={{width: '120px', marginRight: '20px'}} value={this.state.token} onChange={event => this.setState({token: event.target.value})}/>
-                    <button onClick={() => { localStorage.setItem('SKToken', this.state.token); }}>Save Token to Browser</button>
+                    <button onClick={() => { localStorage.setItem('SKToken', this.state.token); }}>Update Saved Token</button>
                     <p>
                         The above token is generated just for you.
                         Anyone who has the above token can submit data that will appear on the stats page for your username (so I recommend not showing it on stream).
