@@ -1,5 +1,6 @@
 import React from 'react';
 import './App.css';
+import Collapsible from 'react-collapsible';
 import init, {
     set_board_table,
     calculate_probabilities_with_board_constraints,
@@ -7,6 +8,8 @@ import init, {
     disambiguate_final_board,
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
+
+const VERSION_STRING = 'v0.0.18';
 
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
@@ -120,25 +123,8 @@ class Tile extends React.Component {
 
 let wasm = init(process.env.PUBLIC_URL + "/sploosh_wasm_bg.wasm");
 
-// Debugging value, ignore me.
-window.JUST_ONCE = false;
-
 // Super ugly, please forgive me. :(
 var globalMap = null;
-
-async function tryToProcessFrame() {
-    if (globalMap === null)
-        return;
-    if (globalMap.readyToProcess() && globalMap.state.doVideoProcessing)
-        await globalMap.readBoardState();
-}
-
-async function globalProcessingTick() {
-    await tryToProcessFrame();
-    // We use setTimeout nested like this rather than setInterval so that the ticks
-    // don't get bunched up if the processing takes too long.
-    setTimeout(globalProcessingTick, 25);
-}
 
 async function dbCachedFetch(url, callback) {
     function cacheMiss() {
@@ -224,9 +210,159 @@ function actuallyMakeBoardIndicesTable() {
     return boardIndices;
 }
 
-if (!window.JUST_ONCE) {
-    // XXX: Only re-enable this if we're re-enabling CV screen cap.
-    //globalProcessingTick();
+function generateRandomChar() {
+    const base58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const array = new Uint8Array(1);
+    while (true) {
+        crypto.getRandomValues(array);
+        const index = array[0] & 63;
+        if (index < base58.length)
+            return base58[index];
+    }
+}
+
+function generateRandomToken(n) {
+    let result = '';
+    for (let i = 0; i < n; i++)
+        result += generateRandomChar();
+    return result;
+}
+
+// Ugh, maybe later I'll give it a proper domain, and move over to https.
+const SPYWARE_HOST = 'http://ec2-34-223-48-61.us-west-2.compute.amazonaws.com:1234';
+
+var globalSpyware = null;
+var globalSpywareCounter = -1;
+
+async function sendSpywareEvent(eventData) {
+    if (globalSpyware === null || globalMap === null)
+        return;
+    if (!globalSpyware.state.loggedIn)
+        return;
+    if (!globalMap.state.spywareMode)
+        return;
+    eventData.timestamp = (new Date()). getTime() / 1000;
+    globalSpywareCounter++;
+    //console.log('Sending spyware event:', globalSpywareCounter, eventData);
+    const body = JSON.stringify({
+        username: globalSpyware.state.username,
+        token: globalSpyware.state.token,
+        session: globalSpyware.session,
+        events: {
+            [globalSpywareCounter]: eventData,
+        },
+    });
+    const response = await fetch(SPYWARE_HOST + '/write', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body,
+    });
+    globalSpyware.setState({charsSent: globalSpyware.state.charsSent + body.length});
+    if (!response.ok)
+        globalSpyware.setState({errors: true});
+}
+
+class SpywareModeConfiguration extends React.Component {
+    constructor() {
+        super();
+        globalSpyware = this;
+        this.session = generateRandomToken(16);
+        let token = localStorage.getItem('SKToken');
+        if (token === null) {
+            token = generateRandomToken(8);
+            localStorage.setItem('SKToken', token);
+        }
+        let defaultUsername = localStorage.getItem('SKUsername');
+        this.state = {
+            username: defaultUsername === null ? '' : defaultUsername,
+            token,
+            loggedIn: false,
+            errors: false,
+            charsSent: false,
+        };
+    }
+
+    async onLogin() {
+        const username = this.state.username;
+        if (username === '') {
+            alert('Username must be non-empty');
+            return;
+        }
+        const response = await fetch(SPYWARE_HOST + '/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                'username': username,
+                'token': this.state.token,
+            }),
+        });
+        const result = await response.json();
+        console.log('Login:', result);
+        if (result.success) {
+            // Stash the username when we successfully log in, as a convenience for the user.
+            localStorage.setItem('SKUsername', username);
+            this.setState({loggedIn: true}, () => {
+                sendSpywareEvent({
+                    kind: 'login',
+                    version: VERSION_STRING,
+                    bigTable: globalMap === null ? null : globalMap.bigTable,
+                });
+            });
+        } else {
+            alert('Bad token! This username might already be taken. If you need to recover your login token contact Peter Schmidt-Nielsen.');
+        }
+    }
+
+    async onLogout() {
+        this.setState({loggedIn: false});
+    }
+
+    render() {
+        return <div style={{
+            fontSize: '120%',
+            margin: '10px',
+            padding: '10px',
+            border: '2px solid white',
+            borderRadius: '8px',
+            width: '450px',
+            display: 'inline-block',
+            backgroundColor: this.state.loggedIn ? '#696' : '#777',
+        }}>
+            <span style={{fontSize: '120%'}}>Spyware Mode:</span>
+            <br/>
+            {
+                this.state.loggedIn ?
+                    <>
+                        Logged in as: <span style={{fontFamily: 'monospace', fontSize: '150%'}}>{this.state.username}</span>
+                        <button style={{marginLeft: '20px'}} onClick={() => this.onLogout()}>Logout</button>
+                        <br/>
+                        Events sent: {globalSpywareCounter + 1} &nbsp;&nbsp;&nbsp; Chars sent: {this.state.charsSent}
+                    </> : <>
+                        Username: <input data-stop-shortcuts style={{width: '100px', fontFamily: 'monospace'}} value={this.state.username} onChange={event => this.setState({username: event.target.value})}/>
+                        <button style={{marginLeft: '20px'}} onClick={() => this.onLogin()}>Login</button>
+                    </>
+            }
+            <br/>
+            <div style={{marginTop: '20px'}}>
+                <Collapsible trigger={
+                    <div className="clickable" style={{width: '200px', margin: '0px'}}>
+                        Access Token
+                    </div>
+                }>
+                    Token: <input data-stop-shortcuts style={{width: '120px', marginRight: '20px'}} value={this.state.token} onChange={event => this.setState({token: event.target.value})}/>
+                    <button onClick={() => { localStorage.setItem('SKToken', this.state.token); }}>Save Token to Browser</button>
+                    <p>
+                        The above token is generated just for you.
+                        Anyone who has the above token can submit data that will appear on the stats page for your username (so I recommend not showing it on stream).
+                        If you lose access to it you'll have to pick a new username, or ask <a href="mailto:schmidtnielsenpeter@gmail.com">Peter Schmidt-Nielsen</a> to help you recover your access token.
+                        The token is automatically saved between sessions, but might be lost if you clear all your browser history.
+                        I recommend copying this token down somewhere.
+                    </p>
+                </Collapsible>
+            </div>
+            {this.state.errors && <span style={{fontSize: '120%', color: 'red'}}>Spyware reporting error!</span>}
+        </div>;
+    }
 }
 
 function sampleSquid(length) {
@@ -414,20 +550,24 @@ class BoardTimer extends React.Component {
     toggleRunning() {
         const now = performance.now();
         const elapsed = 1e-3 * (now - this.state.timerStartMS);
+        sendSpywareEvent({kind: 'timer_toggleRunning', elapsed, oldState: this.state});
         if (this.state.timerRunning)
             this.setState({previouslyAccumulatedSeconds: this.state.previouslyAccumulatedSeconds + elapsed});
         this.setState({timerRunning: !this.state.timerRunning, timerStartMS: now});
     }
 
     adjustRewards(delta) {
+        sendSpywareEvent({kind: 'timer_adjustRewards', delta, oldState: this.state});
         this.setState({includedRewardsGotten: Math.max(0, Math.min(2, this.state.includedRewardsGotten + delta))});
     }
 
     toggleLoadingTheRoom() {
+        sendSpywareEvent({kind: 'timer_toggleLoadingTheRoom', oldState: this.state});
         this.setState({includesLoadingTheRoom: !this.state.includesLoadingTheRoom});
     }
 
     toggleInvalidated() {
+        sendSpywareEvent({kind: 'timer_toggleInvalidated', oldState: this.state});
         this.setState({invalidated: !this.state.invalidated});
     }
 
@@ -439,6 +579,7 @@ class BoardTimer extends React.Component {
     */
 
     resetTimer() {
+        sendSpywareEvent({kind: 'timer_resetTimer', oldState: this.state});
         this.setState({
             previouslyAccumulatedSeconds: 0.0,
             timerStartMS: performance.now(),
@@ -489,6 +630,15 @@ function computeL1Distance(p1, p2) {
     return Math.abs(p1[0] - p2[0]) + Math.abs(p1[1] - p2[1]);
 }
 
+const defaultConfigurationParams = {
+    firstBoardStepsThousands: 500,
+    firstBoardStepsThousandsStdDev: 500,
+    nextBoardStepsThousands: 7,
+    nextBoardStepsThousandsStdDev: 3,
+    timedBoardStepsThousandsStdDev: 0.2,
+    roomEnteredOffset: 0,
+};
+
 class MainMap extends React.Component {
     videoRef = React.createRef();
     canvasRef = React.createRef();
@@ -501,40 +651,12 @@ class MainMap extends React.Component {
     constructor() {
         super();
         this.state = this.makeEmptyState();
-        this.bannerCache = new Map();
-        window.RECOMP = () => {
-            this.bannerCache = new Map();
-            this.getBoardRegistrationAndScale();
-        };
         globalMap = this;
         this.previouslyReadStates = [null, null, null];
     }
 
     componentDidMount() {
-        this.makeReferenceImageCanvases();
         this.doComputation(this.state.grid, this.state.squidsGotten);
-        //setTimeout(() => this.getScreenRecording(), 1000);
-    }
-
-    makeReferenceImageCanvases() {
-        const hiddenArea = this.hiddenAreaRef.current;
-        this.referenceCanvases = {};
-        // 'top_banner', 'record_banner',
-        for (const name of ['hit', 'miss', 'killed_squid', 'remaining_squid', 'top_banner_new', 'bottom_banner_new']) {
-            const newCanvas = document.createElement('canvas');
-            newCanvas.setAttribute('id', 'canvas_' + name);
-            hiddenArea.appendChild(newCanvas);
-
-            const newImage = document.createElement('img');
-            newImage.src = process.env.PUBLIC_URL + '/images/' + name + '.png';
-            newImage.onload = function() {
-                newCanvas.width = this.width;
-                newCanvas.height = this.height;
-                const ctx = newCanvas.getContext('2d');
-                ctx.drawImage(newImage, 0, 0);
-            };
-            this.referenceCanvases[name] = newCanvas;
-        }
     }
 
     makeEmptyGrid() {
@@ -552,7 +674,7 @@ class MainMap extends React.Component {
                 probs[[x, y]] = 0.0;
         // Select a particular layout, for practice mode.
         const squidLayout = generateLayout();
-        return {
+        const state = {
             mode: 'calculator',
             squidLayout,
             grid: this.makeEmptyGrid(),
@@ -563,65 +685,44 @@ class MainMap extends React.Component {
             cursorBelief: [3, 3],
             valid: true,
             observationProb: 1.0,
-            screenRecordingActive: false,
-            doVideoProcessing: false,
             lastComputationTime: -1,
-            lastCVTime: -1,
 
             turboBlurboMode: false,
             turboBlurboTiming: false,
             showKeyShortcuts: false,
+            spywareMode: false,
 
             timerStepEstimate: null,
 
             potentialMatches: [],
-            firstBoardStepsThousands: 500,
-            firstBoardStepsThousandsStdDev: 500,
-            nextBoardStepsThousands: 7,
-            nextBoardStepsThousandsStdDev: 3,
-            timedBoardStepsThousandsStdDev: 0.2,
-            roomEnteredOffset: 0,
         };
+        // Load relevant configuration from localStorage.
+        const savedSettings = localStorage.getItem('SKSettings');
+        const configParams = savedSettings === null ? defaultConfigurationParams : JSON.parse(savedSettings);
+        return {...state, ...configParams};
     }
 
-    async startScreenRecording() {
-        if (this.state.screenRecordingActive) {
-            alert('Already screen capturing!');
-            return;
-        }
-        const displayMediaOptions = {
-            video: {
-              cursor: "always",
-            },
-            audio: false,
-        };
-        const captureStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-        const video = this.videoRef.current;
-        video.srcObject = captureStream;
-        video.play();
-        this.setState({screenRecordingActive: true});
-        // Ugh, super ugly. I should just wait for the video appropriately. The API gives a callback.
-        // Please forgive me, it's 5 AM where I am, and Linkus starts in ~4 hours.
-        await new Promise(resolve => setTimeout(resolve, 500));
-        this.updateCapture();
-        const canvas = this.canvasRef.current;
-        const outputCanvas = this.outputCanvasRef.current;
-        console.log(canvas, outputCanvas, canvas.width, canvas.height)
-        outputCanvas.width = canvas.width;
-        outputCanvas.height = canvas.height;
-        const ctx = outputCanvas.getContext('2d');
-        ctx.drawImage(canvas, 0, 0);
-        /*
-        setTimeout(
-            () => this.getBoardRegistrationAndScale(),
-            1000,
-        );
-        */
+    getConfigParams() {
+        const settings = {};
+        for (const name of Object.keys(defaultConfigurationParams))
+            settings[name] = Number(this.state[name]);
+        return settings;
+    }
+
+    saveConfigParams() {
+        const configParams = this.getConfigParams();
+        console.log('Saving config params:', configParams);
+        localStorage.setItem('SKSettings', JSON.stringify(configParams));
+    }
+
+    factoryResetConfigParams() {
+        this.setState(defaultConfigurationParams);
     }
 
     async initializeTurboBlurboMode(bigTable) {
         if (this.state.turboBlurboMode !== false)
             return;
+        this.bigTable = bigTable;
         this.setState({turboBlurboMode: 'initializing'});
         this.boardIndices = await makeBoardIndicesTable();
         this.boardIndexToLayoutString = new Array(Object.keys(this.boardIndices).length);
@@ -640,360 +741,6 @@ class MainMap extends React.Component {
             set_board_table(this.boardTable);
             this.setState({turboBlurboMode: true, squidsGotten: '0', mode: 'calculator'});
         });
-    }
-
-    toggleVideoProcessing() {
-        if (!this.state.screenRecordingActive)
-            return;
-        if (this.state.doVideoProcessing === false && !this.readyToProcess()) {
-            alert('You must first detect a board.');
-            return;
-        }
-        this.setState({doVideoProcessing: !this.state.doVideoProcessing});
-        // If we have a queued up board that hasn't verified as debounced yet, just process it.
-        if (this.previouslyReadStates[this.previouslyReadStates.length - 1] !== null) {
-            const resultantState = this.previouslyReadStates[this.previouslyReadStates.length - 1];
-            this.setState(resultantState);
-            this.doComputation(resultantState.grid, resultantState.squidsGotten);
-            this.previouslyReadStates[this.previouslyReadStates.length - 1] = null;
-        }
-    }
-
-    async getBoardRegistrationAndScale() {
-        if (!this.state.screenRecordingActive)
-            return;
-        this.updateCapture();
-        let bestGuessScale = 0.25 * 1.5; //0.5;
-        let searchMargin = 0.7;
-        for (let i = 0; i < 10; i++) {
-            this.boardFitParams = await this.performGridSearch(
-                bestGuessScale * (1 - searchMargin),
-                bestGuessScale * (1 + 2 * searchMargin),
-                i === 0 ? 20 : (i === 1 ? 10 : 4),
-            );
-            bestGuessScale = this.boardFitParams.scale;
-            searchMargin /= 2;
-        }
-        console.log('Best fit params:', this.boardFitParams);
-        // Force a rerender.
-        this.bannerCache.delete(bestGuessScale);
-        this.testForTopBannerAtScale(bestGuessScale);
-        this.testForBottomBanner();
-        console.log('Final fit params:', this.boardFitParams);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        this.setState({doVideoProcessing: true});
-        /*
-        setTimeout(
-            () => this.readBoardState(),
-            250,
-        )
-        //*/
-        //*
-    }
-
-    async performGridSearch(min, max, sampleCount) {
-        let bestParams = {score: -1};
-        for (let i = 0; i < sampleCount; i++) {
-            const testScale = min + i * (max - min) / (sampleCount - 1);
-            const params = this.testForTopBannerAtScale(testScale);
-            if (params.score > bestParams.score)
-                bestParams = params;
-            await new Promise(resolve => setTimeout(resolve, 10));
-        }
-        console.log("Grid search over:", min, "to", max, "got:", bestParams);
-        return bestParams;
-    }
-
-    testForBottomBanner() {
-        const src = window.cv.imread('cv_canvasRef');
-
-        const base_templ = window.cv.imread('canvas_bottom_banner_new');
-        const scaled_banner_width = Math.round(base_templ.size().width * this.boardFitParams.scale);
-        const scaled_banner_height = Math.round(base_templ.size().height * this.boardFitParams.scale);
-        let templ = new window.cv.Mat();
-        let dsize = new window.cv.Size(scaled_banner_width, scaled_banner_height);
-        window.cv.resize(base_templ, templ, dsize, 0, 0, window.cv.INTER_AREA);
-
-        const dst = new window.cv.Mat();
-        const mask = new window.cv.Mat();
-        const matchMode = window.cv.TM_CCOEFF_NORMED;
-        window.cv.matchTemplate(src, templ, dst, matchMode, mask);
-        let result = window.cv.minMaxLoc(dst, mask);
-        let maxPoint = result.maxLoc;
-        let color = new window.cv.Scalar(255, 0, 0, 255);
-        let point = new window.cv.Point(maxPoint.x + templ.cols, maxPoint.y + templ.rows);
-        window.cv.rectangle(src, maxPoint, point, color, 2, window.cv.LINE_8, 0);
-        window.cv.imshow('cv_outputCanvasRef', src);
-        src.delete(); base_templ.delete(); templ.delete(); dst.delete(); mask.delete();
-        this.boardFitParams.bottomBannerOffset = {
-            x: maxPoint.x, y: maxPoint.y,
-        };
-    }
-
-    getCellXY(x, y) {
-        const bannerVerticalSpacing = this.boardFitParams.bottomBannerOffset.y - this.boardFitParams.topBannerOffset.y;
-        let aspectRatioFactor = bannerVerticalSpacing / (828 * this.boardFitParams.scale);
-        if (aspectRatioFactor < 0.95 || aspectRatioFactor > 1.05)
-            aspectRatioFactor = 1;
-
-        //const aspectRatioFactor = 1.0;
-        // Center of 0,0 cell: 161, 244
-        // Center of 1,0 cell: 240, 244
-        // Top of bottom banner: 832
-
-        //let centerX = offsetX + scale * (105.25 + x * 52.2 + window.ADJUST_X);
-        //let centerY = offsetY + scale * (155.75 + y * 52.2 + window.ADJUST_Y);
-        return {
-            x: this.boardFitParams.topBannerOffset.x + this.boardFitParams.scale * (161.5 + 75.5 * x),
-            y: this.boardFitParams.topBannerOffset.y + this.boardFitParams.scale * aspectRatioFactor * (239 + 78.6 * y),
-        };
-    }
-
-    getSquidIndicatorXY(y) {
-        const bannerVerticalSpacing = this.boardFitParams.bottomBannerOffset.y - this.boardFitParams.topBannerOffset.y;
-        let aspectRatioFactor = bannerVerticalSpacing / (828 * this.boardFitParams.scale);
-        if (aspectRatioFactor < 0.95 || aspectRatioFactor > 1.05)
-            aspectRatioFactor = 1;
-        //const aspectRatioFactor = 1.0;
-        // Center of 0,0 squid: 948, 188
-        // Center of 1,0 squid: 948, 324
-
-        return {
-            x: this.boardFitParams.topBannerOffset.x + this.boardFitParams.scale * 948,
-            y: this.boardFitParams.topBannerOffset.y + this.boardFitParams.scale * aspectRatioFactor * (185 + 133 * y),
-        };
-    }
-
-    getBoardRect() {
-        const bannerVerticalSpacing = this.boardFitParams.bottomBannerOffset.y - this.boardFitParams.topBannerOffset.y;
-        let aspectRatioFactor = bannerVerticalSpacing / (828 * this.boardFitParams.scale);
-        if (aspectRatioFactor < 0.95 || aspectRatioFactor > 1.05)
-            aspectRatioFactor = 1;
-        return new window.cv.Rect(
-            Math.round(this.boardFitParams.topBannerOffset.x), Math.round(this.boardFitParams.topBannerOffset.y),
-            Math.round(this.boardFitParams.scale * 1040),
-            Math.round(this.boardFitParams.scale * aspectRatioFactor * 940),
-        );
-    }
-
-    testForTopBannerAtScale(scale) {
-        if (this.bannerCache.has(scale)) {
-            return this.bannerCache.get(scale);
-        }
-        const src = window.cv.imread('cv_canvasRef');
-        const base_templ = window.cv.imread('canvas_top_banner_new');
-
-        const scaled_banner_width = Math.round(base_templ.size().width * scale);
-        const scaled_banner_height = Math.round(base_templ.size().height * scale);
-        let templ = new window.cv.Mat();
-        let dsize = new window.cv.Size(scaled_banner_width, scaled_banner_height);
-        window.cv.resize(base_templ, templ, dsize, 0, 0, window.cv.INTER_AREA);
-
-        const dst = new window.cv.Mat();
-        const mask = new window.cv.Mat();
-        //const matchMode = window.cv.TM_CCOEFF_NORMED;
-        const matchMode = window.cv.TM_CCOEFF_NORMED;
-        window.cv.matchTemplate(src, templ, dst, matchMode, mask);
-        let result = window.cv.minMaxLoc(dst, mask);
-        let maxPoint = result.maxLoc;
-        let color = new window.cv.Scalar(255, 0, 0, 255);
-        let point = new window.cv.Point(maxPoint.x + templ.cols, maxPoint.y + templ.rows);
-        window.cv.rectangle(src, maxPoint, point, color, 2, window.cv.LINE_8, 0);
-        window.cv.imshow('cv_outputCanvasRef', src);
-        src.delete(); base_templ.delete(); templ.delete(); dst.delete(); mask.delete();
-
-        let score = result.maxVal;
-        this.bannerCache.set(scale, score);
-        return {
-            score, scale,
-            topBannerOffset: {x: maxPoint.x, y: maxPoint.y},
-        };
-    }
-
-    readyToProcess() {
-        return this.state.screenRecordingActive &&
-            this.boardFitParams !== undefined &&
-            this.boardFitParams.hasOwnProperty('bottomBannerOffset');
-    }
-
-    async readBoardState() {
-        if (!this.readyToProcess())
-            return;
-
-        const resultantState = {
-            grid: {},
-            squidsGotten: 0,
-        };
-
-        this.updateCapture();
-        const t0 = performance.now();
-
-        const src = window.cv.imread('cv_canvasRef');
-        const ksize = new window.cv.Size(3, 3);
-        window.cv.GaussianBlur(src, src, ksize, 0, 0, window.cv.BORDER_DEFAULT);
-        const toDelete = [src];
-
-        const getPixelColor = (x, y) => {
-            const pixelPtr = src.ucharPtr(Math.round(y), Math.round(x));
-            const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
-            const energy = Math.sqrt(pixelColor.r * pixelColor.r + pixelColor.g * pixelColor.g + pixelColor.b * pixelColor.b);
-            return {...pixelColor, energy};
-        };
-
-        // Extract the info.
-        let nothingColor        = new window.cv.Scalar(80,  80,  80,  255);
-        let hitColor            = new window.cv.Scalar(255, 0,   255, 255);
-        let missColor           = new window.cv.Scalar(100, 255, 0,   255);
-        let killedSquidColor    = new window.cv.Scalar(255, 100, 100, 255);
-        let remainingSquidColor = new window.cv.Scalar(50,  255, 100, 255);
-        let mostLikelyCursorLocation = null;
-        let bestCursorScore = -1;
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-                const cellXY = this.getCellXY(x, y);
-                const wayDown = getPixelColor(cellXY.x, cellXY.y + 15);
-                if (wayDown.energy > bestCursorScore) {
-                    bestCursorScore = wayDown.energy;
-                    mostLikelyCursorLocation = {x, y};
-                }
-            }
-        }
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-                const cellXY = this.getCellXY(x, y);
-                const centerX = cellXY.x;
-                const centerY = cellXY.y;
-
-                // WARNING: This isn't appropriately scale insensitive.
-                const D = 2;
-                //const farD = 3;
-                const center     = getPixelColor(centerX,        centerY);
-                const upLeft     = getPixelColor(centerX - D,    centerY - D);
-                const upRight    = getPixelColor(centerX + D,    centerY - D);
-                const downLeft   = getPixelColor(centerX - D,    centerY + D);
-                const downRight  = getPixelColor(centerX + D,    centerY + D);
-                const probablyInsideCursor = x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y;
-                // This variable says if we think our left side is likely corrupted by the cursor's halo.
-                const cursorHaloLeft  = probablyInsideCursor || (x === mostLikelyCursorLocation.x + 1 && y === mostLikelyCursorLocation.y);
-                const cursorHaloRight = probablyInsideCursor || (x === mostLikelyCursorLocation.x - 1 && y === mostLikelyCursorLocation.y);
-                const cursorHaloUp    = probablyInsideCursor || (x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y + 1);
-                const cursorHaloDown  = probablyInsideCursor || (x === mostLikelyCursorLocation.x && y === mostLikelyCursorLocation.y - 1);
-                const cursorHaloUL = cursorHaloUp   || cursorHaloLeft;
-                const cursorHaloUR = cursorHaloUp   || cursorHaloRight;
-                const cursorHaloDL = cursorHaloDown || cursorHaloLeft;
-                const cursorHaloDR = cursorHaloDown || cursorHaloRight;
-                
-                let color = nothingColor;
-
-                let threshold = probablyInsideCursor ? 240 : 220;
-                const passingCount = (
-                    (center.energy    >= threshold) +
-                    (upLeft.energy    >= (cursorHaloUL ? 240 : 220)) +
-                    (upRight.energy   >= (cursorHaloUR ? 240 : 220)) +
-                    (downLeft.energy  >= (cursorHaloDL ? 240 : 220)) +
-                    (downRight.energy >= (cursorHaloDL ? 240 : 220))
-                );
-                const greenerMargin = probablyInsideCursor ? 1 : 1.02;
-                const greenerThanBlueCount = (
-                    (center.g    >= center.b *    greenerMargin) +
-                    (upLeft.g    >= upLeft.b *    (cursorHaloUL ? greenerMargin : 1.05)) +
-                    (upRight.g   >= upRight.b *   (cursorHaloUR ? greenerMargin : 1.05)) +
-                    (downLeft.g  >= downLeft.b *  (cursorHaloDL ? greenerMargin : 1.05)) +
-                    (downRight.g >= downRight.b * (cursorHaloDR ? greenerMargin : 1.05))
-                );
-                // There's an obnoxious light in this cell, so we have to special case it.
-                //const disqualified = x === 4 && y === 6 && center.energy < 200;
-                resultantState.grid[[x, y]] = null;
-                if (
-                    (passingCount >= 4 && greenerThanBlueCount >= 3) || (passingCount >= 3 && greenerThanBlueCount >= 4)
-                ) {
-                    const maxRed   = Math.max(center.r, upLeft.r, upRight.r, downLeft.r, downRight.r);
-                    const maxGreen = Math.max(center.g, upLeft.g, upRight.g, downLeft.g, downRight.g);
-                    if (maxRed > maxGreen * 1.25) {
-                        color = hitColor
-                        resultantState.grid[[x, y]] = 'HIT';
-                    } else {
-                        color = missColor;
-                        resultantState.grid[[x, y]] = 'MISS';
-                    }
-                }
-                if (window.JUST_ONCE) {
-                    // Debugging code, please ignore this.
-                    if (probablyInsideCursor)
-                        console.log('INSIDE!!!!!');
-                    console.log('Scores:', x, y, probablyInsideCursor, greenerThanBlueCount, center, upLeft, upRight, downLeft, downRight);
-                }
-                let tl = new window.cv.Point(centerX - 7, centerY - 7);
-                let br = new window.cv.Point(centerX + 7, centerY + 7);
-                window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
-            }
-        }
-        for (let squidIndex = 0; squidIndex < 3; squidIndex++) {
-            const cellXY = this.getSquidIndicatorXY(squidIndex);
-            const centerX = cellXY.x;
-            const centerY = cellXY.y;
-            const pixelPtr = src.ucharPtr(Math.round(centerY), Math.round(centerX));
-            const pixelColor = {r: pixelPtr[0], g: pixelPtr[1], b: pixelPtr[2]};
-            let tl = new window.cv.Point(centerX - 15, centerY - 15);
-            let br = new window.cv.Point(centerX + 15, centerY + 15);
-            let color = remainingSquidColor;
-            if (pixelColor.r > pixelColor.b * 1.25) {
-                color = killedSquidColor;
-                resultantState.squidsGotten = Math.max(resultantState.squidsGotten, squidIndex + 1);
-            }
-
-            window.cv.rectangle(src, tl, br, color, 1, window.cv.LINE_8, 0);
-        }
-        const boardRect = this.getBoardRect();
-        const srcCrop = src.roi(boardRect);
-        toDelete.push(srcCrop);
-        window.cv.imshow('cv_outputCanvasRef', srcCrop);
-        for (const mat of toDelete)
-            mat.delete();
-        const t1 = performance.now();
-        console.log('CV took: ' + (t1 - t0) + 'ms');
-        this.setState({lastCVTime: t1 - t0});
-
-        function compareStatesEqual(A, B) {
-            if (A === null || B === null)
-                return false;
-            let allEqual = A.squidsGotten  === B.squidsGotten;
-            for (let y = 0; y < 8; y++)
-                for (let x = 0; x < 8; x++)
-                    if (A.grid[[x, y]] !== B.grid[[x, y]])
-                        allEqual = false;
-            return allEqual
-        }
-
-        // Only recompute if we see states of the form: ABBB (that is, three in a row for debouncing, plus a change).
-        if (
-            (!compareStatesEqual(this.previouslyReadStates[0], this.previouslyReadStates[1])) &&
-            compareStatesEqual(this.previouslyReadStates[1], this.previouslyReadStates[2]) &&
-            compareStatesEqual(this.previouslyReadStates[2], resultantState)
-        ) {
-            this.setState(resultantState);
-            await this.doComputation(resultantState.grid, resultantState.squidsGotten);
-        }
-        this.previouslyReadStates.shift();
-        this.previouslyReadStates.push(resultantState);
-
-        return resultantState;
-    }
-
-    updateCapture() {
-        const video = this.videoRef.current;
-        const canvas = this.canvasRef.current;
-        //const referenceCanvas = this.referenceCanvasRef.current;
-        //const outputCanvas = this.outputCanvasRef.current;
-        const context = canvas.getContext('2d');
-        //const width = video.width;
-        //const height = video.height;
-        const width = 960;
-        const height = Math.round(width * (video.videoHeight / video.videoWidth));
-        console.log('Native image capture shape: ' + video.videoWidth + 'x' + video.videoHeight + ' -> scaling to: ' + width + 'x' + height);
-        canvas.width = width;
-        canvas.height = height;
-        context.drawImage(video, 0, 0, width, height);
     }
 
     *findMatchingLocations(observedBoards, startIndex, scanRange) {
@@ -1016,6 +763,7 @@ class MainMap extends React.Component {
         const matches = [];
         for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
             matches.push(match);
+        sendSpywareEvent({kind: 'recomputePotentialMatches', matches});
         this.setState({potentialMatches: matches});
     }
 
@@ -1044,7 +792,7 @@ class MainMap extends React.Component {
                 priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
             } else {
                 // If we're the last delta, and also not the first, then possibly use our time delta.
-                if (index === null && this.state.timerStepEstimate !== null) {
+                if (index === null && this.state.timerStepEstimate !== null && this.state.turboBlurboTiming) {
                     // Because the timerStepEstimate can be negative I have to avoid underflow.
                     priorStepsFromPreviousMeans.push(Math.max(0, this.state.timerStepEstimate));
                     priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.timedBoardStepsThousandsStdDev));
@@ -1088,8 +836,9 @@ class MainMap extends React.Component {
 
         await wasm;
         let probabilities;
+        let gameHistoryArguments = null;
         if (this.state.turboBlurboMode) {
-            const gameHistoryArguments = this.makeGameHistoryArguments();
+            gameHistoryArguments = this.makeGameHistoryArguments();
             console.log('gameHistoryArguments:', gameHistoryArguments);
 
             probabilities = calculate_probabilities_from_game_history(
@@ -1109,6 +858,7 @@ class MainMap extends React.Component {
             );
         }
 
+        let valid = true;
         if (probabilities !== undefined) {
             let maxY = 0;
             let maxX = 0;
@@ -1132,12 +882,27 @@ class MainMap extends React.Component {
                 }
             }
             const observationProb = probabilities[64];
-            this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid: true, observationProb });
+            this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid, observationProb });
         } else {
-            this.setState({ valid: false });
+            valid = false;
+            this.setState({ valid });
         }
         const t1 = performance.now();
         this.setState({lastComputationTime: t1 - t0});
+        // Send a really big payload.
+        sendSpywareEvent({
+            kind: 'doComputation',
+            grid, hits, misses, numericSquidsGotten,
+            oldValid: this.state.valid,
+            didWeConcludeTheSituationWasValid: valid,
+            probabilities: Array.from(probabilities),
+            turboBlurboMode: this.state.turboBlurboMode,
+            turboBlurboTiming: this.state.turboBlurboTiming,
+            gameHistoryArguments: gameHistoryArguments.map(a => Array.from(a)),
+            timerStepEstimate: this.state.timerStepEstimate,
+            computationTime: (t1 - t0) / 1000,
+            configParams: this.getConfigParams(),
+        });
     }
 
     copyToUndoBuffer() {
@@ -1148,6 +913,7 @@ class MainMap extends React.Component {
     }
 
     onClick(x, y, setAsHit) {
+        sendSpywareEvent({kind: 'onClick', x, y, setAsHit});
         const grid = { ...this.state.grid };
         let gridValue = grid[[x, y]];
         let squidsGotten = this.state.squidsGotten;
@@ -1199,6 +965,7 @@ class MainMap extends React.Component {
     }
 
     clearField() {
+        sendSpywareEvent({kind: 'clearField'});
         const templateState = this.makeEmptyState();
         const newState = {};
         for (const name of ['squidLayout', 'grid', 'squidsGotten', 'undoBuffer', 'cursorBelief'])
@@ -1215,18 +982,21 @@ class MainMap extends React.Component {
         if (undoBuffer.length === 0)
             return;
         const undoEntry = undoBuffer.pop();
+        sendSpywareEvent({kind: 'undoLastMarking', undoEntry});
         this.setState({grid: undoEntry.grid, squidsGotten: undoEntry.squidsGotten, cursorBelief: undoEntry.cursorBelief, undoBuffer});
         this.doComputation(undoEntry.grid, undoEntry.squidsGotten);
     }
 
     reportMiss() {
-        if (this.state.best !== null && this.state.grid[this.state.best] === null)
+        if (this.state.best !== null && this.state.grid[this.state.best] === null) {
+            sendSpywareEvent({kind: 'reportMiss', best: this.state.best, oldGrid: this.state.grid});
             this.onClick(...this.state.best);
+        }
     }
 
     reportHit() {
-        if (this.state.best !== null && this.state.grid[this.state.best] === null)
-        {
+        if (this.state.best !== null && this.state.grid[this.state.best] === null) {
+            sendSpywareEvent({kind: 'reportHit', best: this.state.best, oldGrid: this.state.grid});
             this.onClick(...this.state.best, true);
             const {hits, misses, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
             if (hits.length === 9) {
@@ -1239,9 +1009,11 @@ class MainMap extends React.Component {
         const boardTimer = this.timerRef.current;
         if (boardTimer === null)
             return;
-        const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(boardTimer.getSecondsElapsed());
+        const elapsed = boardTimer.getSecondsElapsed();
+        const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(elapsed);
         this.setState({timerStepEstimate});
         console.log('Timer step estimate:', timerStepEstimate);
+        sendSpywareEvent({kind: 'splitTimer', invalidated: boardTimer.state.invalidated, timerStepEstimate: timerStepEstimate, elapsed});
         boardTimer.setState({
             previouslyAccumulatedSeconds: 0.0,
             timerStartMS: performance.now(),
@@ -1273,6 +1045,7 @@ class MainMap extends React.Component {
                 numericValue = 3;
             }
         }
+        sendSpywareEvent({kind: 'incrementKills', oldGrid: this.state.grid, newGrid: grid, newNumericValue: numericValue});
         this.setState({grid, squidsGotten: '' + numericValue});
         this.doComputation(grid, '' + numericValue);
     }
@@ -1289,9 +1062,16 @@ class MainMap extends React.Component {
         if (finalBoard === undefined) {
             // TODO: Show a proper error message in this case!
             //alert('Ambiguous!');
+            sendSpywareEvent({
+                kind: 'ambiguousCopyToHistory',
+                grid: this.state.grid,
+                squidsGotten: this.state.squidsGotten,
+                gameHistoryArguments: gameHistoryArguments.map(a => Array.from(a)),
+            });
             return false;
         }
         console.log('Final board:', finalBoard);
+        sendSpywareEvent({kind: 'copyToHistory', squidLayout: finalBoard});
         const layoutString = this.boardIndexToLayoutString[finalBoard];
         const observedBoards = gameHistoryArguments[0];
         let fillIndex = observedBoards.length;
@@ -1305,6 +1085,7 @@ class MainMap extends React.Component {
     }
 
     shiftHistory() {
+        sendSpywareEvent({kind: 'shiftHistory'});
         const drawingBoards = this.layoutDrawingBoardRefs.map((ref) => ref.current);
         for (let i = 0; i < drawingBoards.length -1; i++) {
             drawingBoards[i].setState(drawingBoards[i + 1].state);
@@ -1375,32 +1156,31 @@ class MainMap extends React.Component {
                         <span><strong>&nbsp;Value&nbsp;</strong></span>
                         <span>&nbsp;Shots used:&nbsp;</span>
                         <span>&nbsp;{usedShots}&nbsp;</span>
-                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && 
-                    <>
-                        <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} />
-                        <span>&nbsp;Last steps:&nbsp;</span>
-                        <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
-                    </>
-                    }
-                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && this.state.showKeyShortcuts &&
-                    <>
-                        <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
-                        <span>&nbsp;Toggle Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
-                        <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
-                        <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;&lt;&nbsp;</span>
-                        <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
-                        <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
-                        <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
-                        <span>&nbsp;Split Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
-                    </>
-                    }
+                        {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+                            <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} />
+                            <span>&nbsp;Last steps:&nbsp;</span>
+                            <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
+                        </>}
+                        {this.state.turboBlurboMode && this.state.turboBlurboTiming && this.state.showKeyShortcuts && <>
+                            <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
+                            <span>&nbsp;Toggle Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
+                            <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
+                            <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;&lt;&nbsp;</span>
+                            <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
+                            <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
+                            <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
+                            <span>&nbsp;Split Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
+                        </>}
                     </div>
-                    {this.state.turboBlurboMode && this.state.turboBlurboTiming &&
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button>
-                    }
+                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+                        <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button><br/>
+                        <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({spywareMode: !this.state.spywareMode}) }}>{
+                            this.state.spywareMode ? <>Disable Spyware Mode</> : <>Enable Spyware Mode</>
+                        }</button>
+                    </>}
                 </div>
-            {this.state.doVideoProcessing || this.renderActualMap(false)}
-            <span style={{display: "inline-block"}}></span>
+                {this.state.doVideoProcessing || this.renderActualMap(false)}
+                <span style={{display: "inline-block"}}></span>
             </div>
             {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
@@ -1470,7 +1250,7 @@ class MainMap extends React.Component {
                 </div>
             }
             <br />
-            {openingOptimizer && (!this.state.screenRecordingActive) && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
+            {openingOptimizer && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
                 <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
@@ -1478,7 +1258,6 @@ class MainMap extends React.Component {
                 </div>
             </>}
             <br/>
-            <hr/>
             {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...<br/></div>}
             {this.state.turboBlurboMode === true && <>
                 <div>
@@ -1486,16 +1265,22 @@ class MainMap extends React.Component {
                         <LayoutDrawingBoard parent={this} ref={ref} key={i}/>
                     )}
                 </div>
+                <hr/>
                 <div style={{color: 'white', fontSize: '130%'}}>
                     Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):<br/>
-                    First board mean:    <input style={{width: '50px'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
-                    First board stddev:  <input style={{width: '50px'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Next board mean:     <input style={{width: '50px'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
-                    Next board stddev:   <input style={{width: '50px'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Timed board stddev:  <input style={{width: '50px'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>&nbsp;
-                    Room entered offset: <input style={{width: '50px'}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
+                    First board mean:    <input style={{width: '60px', fontSize: '120%'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
+                    First board stddev:  <input style={{width: '60px', fontSize: '120%'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Next board mean:     <input style={{width: '60px', fontSize: '120%'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
+                    Next board stddev:   <input style={{width: '60px', fontSize: '120%'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
+                    Timed board stddev:  <input style={{width: '60px', fontSize: '120%'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>&nbsp;
+                    Room entered offset: <input style={{width: '60px', fontSize: '120%'}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
                 </div>
-                <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '1px solid white', width: '400px', minHeight: '20px', display: 'inline-block'}}>
+
+                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.saveConfigParams(); }}>Save Settings</button> &nbsp;
+                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.factoryResetConfigParams(); }}>Reset to Defaults</button>
+                <br/>
+
+                <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '2px solid white', borderRadius: '8px', width: '400px', minHeight: '20px', display: 'inline-block'}}>
                     {this.state.potentialMatches.map((match, i) => {
                         const diffs = match.slice(1);
                         return <div key={i}>
@@ -1513,44 +1298,18 @@ class MainMap extends React.Component {
                 this.initializeTurboBlurboMode(true);
             }}>Initialize Turbo Blurbo Mode (big table)</button><br/>
 
-            {/*
-            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.startScreenRecording();
-            }}>Start Screen Cap</button>
-            <button disabled={!this.state.screenRecordingActive} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.bannerCache = new Map();
-                this.getBoardRegistrationAndScale();
-            }}>Detect Board</button>
-            <button disabled={!this.state.screenRecordingActive} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.toggleVideoProcessing();
-            }}>{this.state.doVideoProcessing ? 'Stop Processing (p)' : 'Start Processing (p)'}</button><br />
+            {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
-            <video style={{display: 'none'}} ref={this.videoRef}>Video stream not available.</video>
-            <canvas style={{display: 'none'}} ref={this.canvasRef} id="cv_canvasRef"></canvas>
-            <div style={{display: 'inline-block'}}>
-                <div style={{
-                    display: 'inline-block',
-                    position: 'relative',
-                }}>
-                    <canvas style={{
-                        border: this.state.doVideoProcessing ? '5px solid red' : '5px solid blue',
-                        width: '1000px',
-                    }} ref={this.outputCanvasRef} id="cv_outputCanvasRef"></canvas>
-                    {this.renderOverlayMap()}
-                </div>
-            </div>
-            <br/>
-            */}
-            {/* <span style={{ color: 'white' }}>Last CV time: {this.state.lastCVTime}ms - Last recompute time: {this.state.lastComputationTime}ms</span> */}
-            <span style={{ color: 'white' }}>Last recompute time: {this.state.lastComputationTime}ms</span>
+            <span style={{color: 'white'}}>Last recompute time: {this.state.lastComputationTime.toFixed(2)}ms</span>
             <div style={{display: 'none'}} ref={this.hiddenAreaRef}></div>
         </div>;
     }
 }
 
 function globalShortcutsHandler(evt) {
-    if (evt.key === 'p' && globalMap !== null)
-        globalMap.toggleVideoProcessing();
+    // Check if the target is an input field that should take precedence over shortcuts.
+    if (evt.target && 'getAttribute' in evt.target && evt.target.getAttribute('data-stop-shortcuts'))
+        return;
 
     // Add z or y for German keyboard support.
     if (evt.key === 'z' && evt.ctrlKey)
@@ -1587,11 +1346,6 @@ document.addEventListener('keydown', globalShortcutsHandler);
 class App extends React.Component {
     componentDidMount() {
         document.body.style.backgroundColor = '#666';
-        /*
-        const opencvScript = document.createElement('script');
-        opencvScript.addEventListener('load', )
-        opencvScript.setAttribute('src', '');
-        */
     }
 
     render() {
@@ -1601,18 +1355,15 @@ class App extends React.Component {
             <div style={{ display: 'inline-block', width: '600px' }}>
                 <h1 style={{ color: 'white' }}>Sploosh Kaboom Probability Calculator</h1>
                 <p style={{ color: 'white' }}>
-                    This page gives exact probabilities (no approximation) of hitting a squid in each cell, given the observation of hits, misses, and completed squid kills.
-                    Click on the map to cycle a cell between HIT and MISS.
-                    You can also set the number of squids completely killed in the drop-down menu at the bottom.
-                    You should set this to the value you see in the game for the number of squids killed.
-                    This will yield slightly more accurate probabilities.
-                    The highest probability location to play will be shown with a yellow outline.
-                    If you play perfectly according to picking the highlighted cell you will win in 20 or fewer shots ≈18.5% of the time.
+                    This is a tool for computing the likely locations of squids in the sploosh kaboom minigame of The Legend of Zelda: The Wind Waker (both SD and HD versions).
+                    Unfortunately it's currently pretty complicated to use correctly.
+                    A collection of tutorials will be compiled at some point, hopefully soon.
+                    For now, see the <a href="https://github.com/petersn/web-sploosh-kaboom">GitHub repository</a>.
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe (v0.0.17)</span><br/>
-            <span style={{ color: 'white' }}><a href="https://github.com/petersn/web-sploosh-kaboom">GitHub Repository</a></span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe ({VERSION_STRING})</span><br/>
+            <span style={{ color: 'white' }}></span>
         </div>;
     }
 }

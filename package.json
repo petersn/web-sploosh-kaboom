@@ -10,6 +10,7 @@
     "gh-pages": "^2.2.0",
     "jquery": "^3.5.0",
     "react": "^16.13.1",
+    "react-collapsible": "^2.7.0",
     "react-dom": "^16.13.1",
     "react-numeric-input": "^2.2.3",
     "react-scripts": "3.4.1"

@@ -12,10 +12,23 @@ code {
     monospace;
 }
 
-th, td, tr, table{
+th, td, tr, table {
   text-align: left;
   border: 2px solid #aaa;
   border-collapse: collapse;
+}
+
+.clickable {
+  border: 1px solid white;
+  border-radius: 5px;
+  margin: 10px;
+  padding: 5px;
+  background-color: #666;
+  cursor: pointer;
+}
+
+.clickable:hover {
+  background-color: #888;
 }
 
 .container {
@@ -33,4 +46,31 @@ th, td, tr, table{
   padding: 8px 4px;
   border-left: 2px solid #aaa;
   border-bottom: 2px solid #aaa;
+}
+
+/* Adapted from the default example: https://www.npmjs.com/package/react-collapsible */
+.Collapsible__contentInner {
+  padding: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.Collapsible__trigger {
+  display: inline-block;
+  position: relative;
+}
+
+.Collapsible__trigger:after {
+  font-family: 'FontAwesome';
+  content: '\f107';
+  position: absolute;
+  right: 25px;
+  top: 9px;
+  display: block;
+  transform: rotateZ(-180deg);
+  transition: transform 300ms;
+}
+
+.Collapsible__trigger.is-open:after {
+  transform: rotateZ(0deg);
 }
