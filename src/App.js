@@ -898,7 +898,7 @@ class MainMap extends React.Component {
             probabilities: Array.from(probabilities),
             turboBlurboMode: this.state.turboBlurboMode,
             turboBlurboTiming: this.state.turboBlurboTiming,
-            gameHistoryArguments: gameHistoryArguments.map(a => Array.from(a)),
+            gameHistoryArguments: (gameHistoryArguments === null) ? [] : gameHistoryArguments.map(a => Array.from(a)),
             timerStepEstimate: this.state.timerStepEstimate,
             computationTime: (t1 - t0) / 1000,
             configParams: this.getConfigParams(),
