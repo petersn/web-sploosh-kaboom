@@ -41,10 +41,16 @@
                     <feGaussianBlur result="blurOut" in="offOut" stdDeviation="20"/>
                     <feBlend in="SourceGraphic" in2="blurOut" mode="normal"/>
                 </filter>
+                <filter id="largeShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feOffset result="offOut" in="SourceGraphic" dx="10" dy="10"/>
+                    <feGaussianBlur result="blurOut" in="offOut" stdDeviation="30"/>
+                    <feBlend in="SourceGraphic" in2="blurOut" mode="normal"/>
+                </filter>
             </defs>
         </svg>
         <video id="gameClip" style="opacity: 0; position: absolute; top: 0px; left: 0px; z-index: 5;" width="1440" height="810">
-            <source src="game_clip_lowres.mp4" type="video/mp4">
+            <!-- <source src="game_clip_lowres.mp4" type="video/mp4"> -->
+            <source src="game_clip_new.mp4" type="video/mp4">
         </video>
         <div id="pausaIndicatorContainer" style="opacity: 0; position: absolute; top: 0px; left: 0px; z-index: 10; width: 1440px; height: 810px; padding: 0px;">
             <div id="pausaIndicatorFloat" style="float: right; margin: 40px; margin-top: 20px;">
@@ -409,15 +415,17 @@ async function showRNGSequence(root) {
         let xOffsets = [0 + 100, 340, 690];
         if (rowIndex == 10)
             xOffsets = [0 + 85, 340 + 110, 690 + 30];
+        const newTexts = [];
         for (let i = 0; i < texts.length; i++) {
             const text = textGroup.append("text");
             text.text(texts[i])
                 .attr("x", 0).attr("y", 0)
-                .attr("font-family", "EB Garamond")
-                .attr("font-size", "60px")
+                .attr("font-family", i === 1 ? "monospace" : "EB Garamond")
+                .attr("font-size", i === 1 ? "46px" : "60px")
                 .attr("transform", d3Transform()
                     .translate([xOffsets[i], 60 + lineSpacing * rowIndex])
                 );
+            newTexts.push(text);
             //if (i == 0)
             //    text.attr("text-anchor", "right");
             if (rowIndex !== 10)
@@ -425,9 +433,10 @@ async function showRNGSequence(root) {
             if (i == 2)
                 uses.push(text);
         }
-        textGroup.selectAll("text").transition()
-            .duration(600)
-            .attr("fill-opacity", 1);
+        for (const t of newTexts)
+            t.transition()
+                .duration(600)
+                .attr("fill-opacity", 1);
     }
     for (let i = 0; i < 10; i++) {
         fillInRow(i, [i, rngSeq[i].toFixed(8), ""]);
@@ -435,7 +444,7 @@ async function showRNGSequence(root) {
             //await sleep(1000);
             await nextSlide();
         }
-        await sleep(300);
+        await sleep(150);
     }
     fillInRow(10, ["⋮", "⋮", ""])
 
@@ -447,7 +456,7 @@ async function showRNGSequence(root) {
         use.transition()
             .duration(600)
             .attr("fill-opacity", 1);
-        await sleep(200);
+        await sleep(150);
     }
 
     // Draw a big curly brace.
@@ -473,21 +482,21 @@ async function showRNGSequence(root) {
     //makeBigBoiCurly(textGroup, 1250, 180, 3.5, "Frame #1");
     //makeBigBoiCurly(textGroup, 1250, 180 - 42, 2.75, "Frame #1");
     makeBigBoiCurly(textGroup, 1250, 180 - 37, 2.75, "Frame #1");
-    textFillLoop(0, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity"]);
+    textFillLoop(0, ["Should Link blink?", "Should a rupee sparkle?", "Particle velocity"]);
 
     //await sleep(3000);
     await nextSlide();
     fadeIn(makeExtendoLine(660 + 900, 5 + lineSpacing * 3, 0, 5 + lineSpacing * 3, tableGroup, true)[0], 0.4);
     //makeBigBoiCurly(textGroup, 1250, 480 - 70, 3.6, "Frame #2");
     makeBigBoiCurly(textGroup, 1250, 480 - 50, 3.6, "Frame #2");
-    textFillLoop(3, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity", "Object lighting"]);
+    textFillLoop(3, ["Should Link blink?", "Should a rupee sparkle?", "Particle velocity", "Object lighting"]);
 
     //await sleep(2000);
     await nextSlide();
     fadeIn(makeExtendoLine(660 + 900, 5 + lineSpacing * 7, 0, 5 + lineSpacing * 7, tableGroup, true)[0], 0.4);
     //makeBigBoiCurly(textGroup, 1250, 780 - 70, 3.6, "Frame #3");
     makeBigBoiCurly(textGroup, 1250, 780 - 30, 3.6, "Frame #3");
-    textFillLoop(7, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity", "⋮"]);
+    textFillLoop(7, ["Should Link blink?", "Should a rupee sparkle?", "Particle velocity", "⋮"]);
     //await sleep(2000);
     await nextSlide();
 }
@@ -803,16 +812,17 @@ async function showBoardAveraging(root) {
 
     // Recompute the probabilities.
     await nextSlide();
+    globalTimeScale *= 0.5;
     setBoardProbabilities(aggregationBoard, (x, y) => {
         return 0;
     }, true, 1);
     await sleep(2000);
     await animateProbabComputation(false);
+    globalTimeScale /= 0.5;
 
     // Draw an indicator on the highest probability cell.
     await nextSlide();
     drawHighlightCircle(root, 520 - S*2, 470 - S*2, 30, "yellow");
-
 
     // Draw a hit.
     await nextSlide();
@@ -824,13 +834,13 @@ async function showBoardAveraging(root) {
 
     // Recompute the probabilities.
     await nextSlide();
-    globalTimeScale *= 0.5;
+    globalTimeScale *= 0.4;
     setBoardProbabilities(aggregationBoard, (x, y) => {
         return 0;
     }, true, 1);
     await sleep(2000);
     await animateProbabComputation(false);
-    globalTimeScale *= 2;
+    globalTimeScale /= 0.4;
 
 
     // Draw a hit.
@@ -842,13 +852,13 @@ async function showBoardAveraging(root) {
     await filterOutIncompatible(2, 3, true);
     // Recompute the probabilities.
     await sleep(1000);
-    globalTimeScale *= 0.5;
+    globalTimeScale *= 0.4;
     setBoardProbabilities(aggregationBoard, (x, y) => {
         return 0;
     }, true, 1);
     await sleep(2000);
     await animateProbabComputation(false);
-    globalTimeScale *= 2;
+    globalTimeScale /= 0.4;
 
     // Draw a miss.
     await nextSlide();
@@ -858,13 +868,13 @@ async function showBoardAveraging(root) {
     await filterOutIncompatible(1, 3, false);
     // Recompute the probabilities.
     await sleep(1000);
-    globalTimeScale *= 0.5;
+    globalTimeScale *= 0.4;
     setBoardProbabilities(aggregationBoard, (x, y) => {
         return 0;
     }, true, 1);
     await sleep(2000);
     await animateProbabComputation(false);
-    globalTimeScale *= 2;
+    globalTimeScale /= 0.4;
 
     // Fill in the remaining hits.
     await nextSlide();
@@ -1757,7 +1767,7 @@ async function showPDFs(root) {
     getTimelineIndicatorX = () => getTranslation(nowIndicator.attr("transform"))[0];
     function advanceTimeIndicator(dt, rateFactor) {
         rateFactor = rateFactor === undefined ? 1 : rateFactor;
-        const slideRate = 0.0095 * rateFactor;
+        const slideRate = 0.0105 * rateFactor;
         const nowX = getTimelineIndicatorX();
         nowIndicator.transition()
             .duration(dt)
@@ -1774,7 +1784,7 @@ async function showPDFs(root) {
     // Advance the video until Linkus is at the door.
     await nextSlide("Advance time until Linkus enters SK.");
     playGameVideo();
-    await advanceTimeIndicator(8700);
+    await advanceTimeIndicator(6700); 
     pauseGameVideo();
 
     // Label the door opening on the timeline.
@@ -1784,7 +1794,7 @@ async function showPDFs(root) {
     // Advance the video until Linkus is right before finishing the first board.
     await nextSlide("Advance until Linkus is done playing the first board.");
     fastForwardGameVideo();
-    await advanceTimeIndicator(10100, 3);
+    await advanceTimeIndicator(9900, 3);
     pauseGameVideo();
 
     // Label the first board being completed on the timeline.
@@ -1941,9 +1951,9 @@ async function showPDFs(root) {
     await nextSlide("Show the first board.");
     const firstBoardGroup = axisGroup.append("g");
     const firstBoard = await makeBoard(240, -330, 0.6, firstBoardGroup, 0.6, true, [
-        {x: 5, y: 5, horizontal: true},
-        {x: 4, y: 1, horizontal: true},
-        {x: 2, y: 1, horizontal: false},
+        {x: 1, y: 7, horizontal: true},
+        {x: 3, y: 4, horizontal: false},
+        {x: 4, y: 6, horizontal: true},
     ]);
     firstBoardGroup.append("text").text("First board:")
         .attr("x", 90).attr("y", -500)
@@ -2110,7 +2120,7 @@ async function showPDFs(root) {
     // Advance the video until Linkus is about to beat the second game.
     await nextSlide("Fast forward through the second game.");
     fastForwardGameVideo();
-    await advanceTimeIndicator(29500 / 3, 3);
+    await advanceTimeIndicator(21400 / 3, 3);
     pauseGameVideo();
 
     // Make the video small again.
@@ -2141,9 +2151,9 @@ async function showPDFs(root) {
     firstBoardGroup.remove();
     const secondBoardGroup = axisGroup.append("g");
     const secondBoard = await makeBoard(240, -330, 0.6, secondBoardGroup, 0.6, true, [
-        {x: 0, y: 3, horizontal: false},
-        {x: 4, y: 5, horizontal: false},
-        {x: 5, y: 2, horizontal: false},
+        {x: 3, y: 3, horizontal: false},
+        {x: 0, y: 6, horizontal: true},
+        {x: 5, y: 4, horizontal: false},
     ]);
     secondBoardGroup.append("text").text("Second board:")
         .attr("x", 75).attr("y", -500)
@@ -2217,14 +2227,272 @@ async function showPDFs(root) {
     // Let the game keep playing.
     await nextSlide("Continue the video.");
     fastForwardGameVideo();
-    // Cheat a little bit here... this speed should be 3.0, but we compress it for aesthetics.
-    await advanceTimeIndicator(43000 / 3, 1.91);
+    // I cheat a little bit here... this speed should be 3.0, but we compress it for aesthetics.
+    await advanceTimeIndicator(38000 / 3, 2.05);
     pauseGameVideo();
     addTimelineEvent(getTimelineIndicatorX(), ["We win!"], -20, 50, 10);
 
     await nextSlide("Done!");
     // Fade out the video.
     startVideoFadeout = true;
+}
+
+const wichmannHillSource = `# Seed the state.
+s1 = s2 = s3 = 100
+def rng():
+    global s1, s2, s3
+    s1 = (171 * s1) % 30269
+    s2 = (172 * s2) % 30307
+    s3 = (170 * s3) % 30323
+    return (s1/30269.0 + s2/30307.0 + s3/30323.0) % 1.0
+`;
+
+async function showWichmannHill(root) {
+    const container = root.append("g");
+
+    container.attr("transform", d3Transform().translate([1920 / 2, 150]))
+
+    container.append("text").text("Wichmann-Hill")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "120px")
+        .attr("font-style", "italic")
+        .attr("text-anchor", "middle")
+        .transition()
+            .duration(1000)
+            .attr("opacity", 1);
+
+    /*
+    root.append("text").text("Wichmann-Hill")
+        .attr("x", 75).attr("y", 500)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "50px")
+        .attr("font-style", "italic")
+        .transition()
+            .duration(1000)
+            .attr("opacity", 1);
+    */
+    // <image href="https://mdn.mozillademos.org/files/6457/mdn_logo_only_color.png" height="200" width="200"/>
+    // file:///home/snp/proj/web-sploosh-kaboom/animation/wichmann_hill_source_transparent.png
+    const baseW = 1743, baseH = 735;
+    container.append("image").attr("href", "wichmann_hill_source_v2.png")
+        .attr("width", baseW * 0.8).attr("height", baseH * 0.8).attr("x", -baseW * 0.8 * 0.5).attr("y", 50)
+        .attr("filter", "url(#dropShadow)")
+        .transition()
+        .duration(1000)
+        .attr("opacity", 1);
+
+    await nextSlide("Move the container over.");
+
+    container.transition()
+        .duration(1500)
+        .attr("transform", d3Transform().translate([540, 150]).scale(0.7))
+    await sleep(1500);
+
+    const tableGroup = root.append("g");
+    tableGroup.attr("transform", d3Transform().translate([90, 870]));
+    tableGroup.append("text").text("RNG state:")
+        .attr("x", 450).attr("y", -140)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "80px")
+        .attr("font-style", "italic")
+        .attr("text-anchor", "middle")
+        .transition()
+            .duration(1000)
+            .attr("opacity", 1);
+    fadeIn(makeExtendoLine(0, 0, 900, 0, tableGroup)[0]);
+    fadeIn(makeExtendoLine(300, -100, 300, 100, tableGroup)[0]);
+    fadeIn(makeExtendoLine(600, -100, 600, 100, tableGroup)[0]);
+
+    await sleep(500);
+
+    const stateTexts = [];
+    ["s1", "s2", "s3"].map((s, i) => {
+        tableGroup.append("text").text(s)
+            .attr("x", 150 + 300 * i).attr("y", -20)
+            .attr("font-family", "monospace")
+            .attr("font-size", "72px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle")
+            .transition()
+                .duration(1000)
+                .attr("opacity", 1);
+        const t = tableGroup.append("text");
+        t.text("100")
+            .attr("x", 150 + 300 * i).attr("y", +80)
+            .attr("font-family", "monospace")
+            .attr("font-size", "72px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle")
+            .transition()
+                .duration(1000)
+                .attr("opacity", 1);
+        stateTexts.push(t);
+    });
+
+    await sleep(1000);
+
+    const listGroup = root.append("g");
+    listGroup.attr("transform", d3Transform().translate([1480, 150]));
+    const listGroupLabel = listGroup.append("text").text("RNG outputs:")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("text-anchor", "middle");
+    listGroupLabel.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    fadeIn(makeExtendoLine(-150, 40, 150, 40, listGroup)[0]);
+
+    await nextSlide("Indicate RNG animation.");
+
+    const lineNumberY = lineNumber => 65 + 54.5 * lineNumber;
+    const lineIndicatorRect = container.append("rect")
+        .attr("x", -baseW * 0.8 * 0.5 + 10).attr("y", lineNumberY(1))
+        .attr("width", baseW * 0.8 - 20).attr("height", 54)
+        .attr("fill", "#55f").attr("fill-opacity", 0);
+    lineIndicatorRect.transition()
+        .duration(500)
+        .attr("fill-opacity", 0.4);
+    await sleep(500);
+
+    function animateToLineNumber(lineNumber) {
+        lineIndicatorRect.transition()
+            .duration(500)
+            .attr("y", lineNumberY(lineNumber));
+        return sleep(500);
+    }
+
+    const stateRows = [
+        {val: 100, mult: 171, mod: 30269, line: 6},
+        {val: 100, mult: 172, mod: 30307, line: 7},
+        {val: 100, mult: 170, mod: 30323, line: 8},
+    ];
+
+    async function replaceText(t, s) {
+        await sleep(350);
+        t.transition()
+            .duration(200)
+            .attr("opacity", 0);
+        await sleep(200);
+        t.text(s);
+        t.transition()
+            .duration(200)
+            .attr("opacity", 1);
+    }
+    async function doBigRNGGenLoop(dumpX, group, startingSpeedMult) {
+        const startingGlobalTimeScale = globalTimeScale;
+        globalTimeScale *= startingSpeedMult;
+        for (let i = 0; i < 11; i++) {
+            for (let rowIndex = 0; rowIndex < 3; rowIndex++) {
+                const row = stateRows[rowIndex];
+                animateToLineNumber(row.line);
+                row.val = (row.mult * row.val) % row.mod;
+                replaceText(stateTexts[rowIndex], "" + row.val);
+                await sleep(600);
+            }
+            // Show the number being output.
+            animateToLineNumber(9);
+            await sleep(200);
+            const indicatorPath = tableGroup.append("path");
+            const pathFunction = d3.line()
+                .x(d => d[0]).y(d => d[1])
+                .curve(d3.curveBasis);
+            const [x1, y1, x2, y2] = [890, 55, dumpX, -615 + 70 * i];
+            const pathData = [[x1, y1], [(x1 + x2) / 2, y1], [(x1 + x2) / 2, y2], [x2, y2]];
+            indicatorPath.attr("d", pathFunction(pathData))
+                .attr("stroke-width", 6).attr("stroke", "black").attr("stroke-linecap", "round")
+                .attr("fill", "none"); // .attr("marker-end", "url(#arrowHead)");
+            const length = indicatorPath.node().getTotalLength();
+            indicatorPath.attr("stroke-dasharray", length + " " + length + " " + length + " " + length).attr("stroke-dashoffset", 3 * length);
+            indicatorPath.transition()
+                .duration(400)
+                .attr("stroke-dashoffset", 2 * length)
+                .attr("opacity", 1)
+                .transition()
+                .duration(400)
+                .attr("stroke-dashoffset", 1 * length);
+
+            let rngOutput = 0.0;
+            for (const row of stateRows)
+                rngOutput += row.val / row.mod;
+            rngOutput %= 1.0;
+
+            group.append("text").text(rngOutput.toFixed(7))
+                .attr("x", 0).attr("y", 120 + 70 * i)
+                .attr("font-family", "monospace")
+                .attr("font-size", "50px")
+                .attr("font-style", "italic")
+                .attr("text-anchor", "middle")
+                .attr("opacity", 0)
+                .transition()
+                    .duration(200)
+                .transition()
+                    .duration(600)
+                    .attr("opacity", 1);
+
+            await sleep(1200);
+            globalTimeScale *= 0.7;
+            globalTimeScale = Math.max(startingGlobalTimeScale * 0.13, globalTimeScale);
+        }
+        globalTimeScale = startingGlobalTimeScale;
+    }
+
+    await doBigRNGGenLoop(1200, listGroup, 1.3);
+
+    await nextSlide("Reset the RNG state to 100, 100, 100");
+    animateToLineNumber(1);
+    await sleep(300);
+    for (const t of stateTexts)
+        replaceText(t, "100");
+    for (const row of stateRows)
+        row.val = 100;
+
+    await nextSlide("Slide the RNG values over.");
+
+    listGroup.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([1480 + 170, 150]));
+
+    const repeatGroup = root.append("g");
+    repeatGroup.attr("transform", d3Transform().translate([1480 - 170, 150]));
+    const repeatGroupLabel = repeatGroup.append("text").text("Second time:")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("text-anchor", "middle");
+    repeatGroupLabel.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    fadeIn(makeExtendoLine(-150, 40, 150, 40, repeatGroup)[0]);
+
+    //await nextSlide("Generate the second round of values.");
+    await sleep(1500);
+    await doBigRNGGenLoop(1050, repeatGroup, 0.4);
+
+    await nextSlide("We get the same result!");
+    listGroup.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([1480, 150]));
+    repeatGroup.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([1480, 150]));
+    repeatGroupLabel.transition()
+        .duration(800)
+        .attr("opacity", 0);
+    listGroupLabel.transition()
+        .duration(800)
+        .attr("opacity", 0)
+        .transition()
+        .duration(0)
+        .text("Every time:")
+        .transition()
+        .duration(400)
+        .attr("opacity", 1);
+
+    await nextSlide("Done!");
 }
 
 async function doSlide(slideFn) {
@@ -2240,14 +2508,15 @@ async function doSlide(slideFn) {
 }
 
 async function main() {
-    //debugPoint();
+    debugPoint();
     //globalTimeScale = 0.6;
     await nextSlide("Begin the presentation.");
-    await doSlide(showBoardAveraging);
-    await doSlide(showRNGSequence);
-    await doSlide(showBoardSampling);
-    await doSlide(showFirstBoardProgression);
-    await doSlide(showPDFs);
+    //await doSlide(showBoardAveraging);
+    //await doSlide(showRNGSequence);
+    //await doSlide(showBoardSampling);
+    //await doSlide(showFirstBoardProgression);
+    //await doSlide(showPDFs);
+    await doSlide(showWichmannHill);
 }
 
 //await doSlide(showBoardSequence);
@@ -2259,10 +2528,11 @@ var firstAdvanceTime = null;
 var savedAdvanceTimings = [];
 //var replaceAdvanceTimings = [0,2659,4646,6615,7905,10670,13045,17137,35058,37875,39988,42603,55366,63348,70612,72018,77112,78779,84400];
 var replaceAdvanceTimings = null;
+//replaceAdvanceTimings = [0,4184,10475,15181,16260,19050];
 const REPLAY_TIME_FACTOR = 1; //3;
 
-debugPoint();
-globalTimeScale = REPLAY_TIME_FACTOR;
+//debugPoint();
+//globalTimeScale = REPLAY_TIME_FACTOR;
 
 function nextSlide(notes) {
     notes = notes === undefined ? "" : notes;
@@ -2326,6 +2596,7 @@ function resolveSlideContinuation() {
 
         document.getElementById("messageBox").innerText = "";
         const resolve = globalNextSlideContinuation;
+        globalNextSlideContinuation = null;
         async function asynchronouslyResolve() {
             resolve();
         }
@@ -2341,8 +2612,10 @@ function globalShortcutsHandler(evt) {
         evt.preventDefault();
     }
     if (evt.key === "n") {
-        globalTimeScale /= 10;
-        fastSlideFlag = true;
+        if (!fastSlideFlag) {
+            globalTimeScale /= 10;
+            fastSlideFlag = true;
+        }
         resolveSlideContinuation();
     }
     if (evt.key === "z" || evt.key === "y")
@@ -2361,52 +2634,6 @@ document.addEventListener("keyup", function(evt) {
 });
 
 main();
-
-/*
-    // Emphasize the curve.
-    await nextSlide();
-    const emphBellCurvePath = bellCurveGroup.append("path");
-    emphBellCurvePath.attr("d", pathFunction(pathData))
-        .attr("stroke-width", 5).attr("stroke", "#22f").attr("stroke-linecap", "round")
-        .attr("fill", "none");
-    emphBellCurvePath.attr("stroke-dasharray", 0.05 * length).attr("stroke-dashoffset", 0);
-    emphBellCurvePath.attr("transform", d3Transform()
-        .translate([20, -20])
-    );
-    const emphDuration = 4000;
-    bellCurvePath.attr("opacity", 1);
-    bellCurvePath
-        .transition()
-        .duration(0.2 * emphDuration)
-        .ease(d3.easeLinear)
-        .attr("opacity", 0.9)
-
-        .transition()
-        .duration(0.6 * emphDuration)
-
-        .transition()
-        .duration(0.2 * emphDuration)
-        .ease(d3.easeLinear)
-        .attr("opacity", 1);
-    emphBellCurvePath
-        .transition()
-        .duration(0.2 * emphDuration)
-        .ease(d3.easeLinear)
-        .attr("opacity", 1)
-        .attr("stroke-dashoffset", 0.2 * length)
-
-        .transition()
-        .duration(0.6 * emphDuration)
-        .ease(d3.easeLinear)
-        .attr("stroke-dashoffset", 0.8 * length)
-
-        .transition()
-        .duration(0.2 * emphDuration)
-        .ease(d3.easeLinear)
-        .attr("opacity", 0)
-        .attr("stroke-dashoffset", 1.0 * length);
-    await sleep(emphDuration);
-*/
 
         </script>
     </body>
