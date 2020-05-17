@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.16.0/d3.min.js" integrity="sha256-Xb6SSzhH3wEPC4Vy3W70Lqh9Y3Du/3KxPqI2JHQSpTw=" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-transform/1.0.4/d3-transform.min.js" integrity="sha256-6lfvvQQRGR9XoF57Y/3H37BZCHaP6BvLihL9k/jHVhI=" crossorigin="anonymous"></script>
+        <!-- <link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet"> -->
+        <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400;1,500&display=swap" rel="stylesheet">
+
+        <style>
+.pausaIndicatorText {
+    color: yellow;
+    font-size: 1400%;
+    text-shadow: 0px 8px 10px #000, 0px -8px 10px #000, 5px 5px 10px #000, -5px 5px 10px #000, 5px -5px 10px #000, -5px -5px 10px #000;
+}
+
+.waveSlow {
+    animation: waveSmall 0.6s alternate infinite ease-in-out;
+}
+
+.waveFast {
+    animation: waveLarge 0.3s alternate infinite ease-in-out;
+}
+
+@keyframes waveSmall {
+    from { transform: translateX(-8px); }
+    to { transform: translateX(8px); }
+}
+
+@keyframes waveLarge {
+    from { transform: translateX(-15px); }
+    to { transform: translateX(15px); }
+}
+        </style>
+    </head>
+    <body style="background-color: #444">
+        <svg width="1920" height="1080" style="background-color: darkgray; margin: 20px">
+            <defs>
+                <filter id="dropShadow" x="-10%" y="-10%" width="150%" height="150%">
+                    <feOffset result="offOut" in="SourceGraphic" dx="20" dy="20"/>
+                    <feGaussianBlur result="blurOut" in="offOut" stdDeviation="20"/>
+                    <feBlend in="SourceGraphic" in2="blurOut" mode="normal"/>
+                </filter>
+            </defs>
+        </svg>
+        <video id="gameClip" style="opacity: 0; position: absolute; top: 0px; left: 0px; z-index: 5;" width="1440" height="810">
+            <source src="game_clip_lowres.mp4" type="video/mp4">
+        </video>
+        <div id="pausaIndicatorContainer" style="opacity: 0; position: absolute; top: 0px; left: 0px; z-index: 10; width: 1440px; height: 810px; padding: 0px;">
+            <div id="pausaIndicatorFloat" style="float: right; margin: 40px; margin-top: 20px;">
+                <!-- ⏸⏵⏩️ -->
+                <span id="pausaIndicator" class="pausaIndicatorText">⏸</span>
+            </div>
+        </div>
+        <pre id="messageBox" style="color: white; font-size: 200%; margin: 20px; margin-left: 60px;"></pre>
+        <pre id="errorBox" style="color: white; font-size: 200%; margin: 20px; margin-left: 60px;"></pre>
+        <pre id="timingsBox" style="color: white; font-size: 200%; margin: 20px; margin-left: 60px;"></pre>
+        <script>
+
+let globalTimeScale = 0.05;
+var skipThrough = true;
+
+//globalTimeScale = 1.0;
+//skipThrough = false;
+
+function sleep(ms) {
+    /*
+    let err = new Error();
+    let msg = err.stack.split(/\n/).slice(2, 3).join("\n");
+    let box = document.getElementById("errorBox");
+    box.innerText = msg + "\n" + box.innerText;
+    */
+    return new Promise(resolve => setTimeout(resolve, ms * globalTimeScale));
+}
+
+const svg = d3.select("svg");
+
+const _transition = d3.transition();
+const closedDuration = _transition.__proto__.duration;
+_transition.__proto__.duration = function(...args) {
+    if (args.length >= 1)
+        args[0] *= globalTimeScale;
+    return closedDuration.call(this, ...args);
+};
+
+function wrapGroup(o) {
+    const g = svg.append("g");
+    g.append(o);
+    return g;
+}
+
+// Define an arrow head.
+svg.append("defs").append("marker")
+    .attr("id", "arrowHead")
+    .attr("refX", 10)
+    .attr("refY", 10)
+    .attr("markerWidth", 20)
+    .attr("markerHeight", 20)
+    .attr("orient", "auto")
+    .append("path")
+    .attr("d", "M 10 10 l -2 -4 c 4 3 6 3.5 10 4 c -4 0.5 -6 1 -10 4 Z")
+    .attr("stroke", "black")
+    .attr("fill", "none")
+    .attr("stroke-linejoin", "round")
+    .attr("stroke-width", 1);
+
+function fadeIn(g, opacityTarget) {
+    opacityTarget = opacityTarget === undefined ? 1 : opacityTarget;
+    return g.transition()
+        .duration(500)
+        .attr("opacity", opacityTarget);
+}
+
+function makeLine(x1, y1, x2, y2, root) {
+    if (root === undefined)
+        root = svg;
+    const g = root.append("g");
+
+    g.append("line")
+        .attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
+        .attr("stroke-width", 2).attr("stroke", "black").attr("stroke-linecap", "round");
+    const anim = g.selectAll("line")
+        .transition()
+        .duration(1000)
+        .attr("stroke-width", 5);
+
+    return [g, anim];
+}
+
+function makeExtendoLine(x1, y1, x2, y2, root, dashed) {
+    dashed = dashed === undefined ? false : dashed;
+    const [line, anim] = makeLine(x1, y1, x1, y1, root);
+    anim.attr("x2", x2).attr("y2", y2);
+    if (dashed)
+        line.attr("stroke-dasharray", "10 15");
+    return [line, anim];
+}
+
+function makeExtendoArrow(x1, y1, x2, y2, root) {
+    const [line, anim] = makeExtendoLine(x1, y1, x2, y2, root);
+    line.attr("marker-end", "url(#arrowHead)");
+    return [line, anim];
+}
+
+const clamp = x => Math.max(0, Math.min(1, x));
+
+const S = 40;
+
+const colorMap = d3.scaleLinear()
+    .domain([0/6, 1/6, 2/6, 3/6, 4/6, 5/6, 6/6])
+    .range(['#004', '#070', '#090', '#0b0', '#0c0', '#0d0', '#3d3'])
+    //.domain([0, 0.5, 1])
+    //.range(['#004', '#0a0', '#0c0'])
+    .interpolate(d3.interpolateRgb); //.interpolate(d3.interpolateHcl);
+
+function setBoardProbabilities(board, probCallback, tweenNumbers, timeScale) {
+    timeScale = timeScale === undefined ? 1 : timeScale;
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            const prob = probCallback(x, y);
+            if (prob === 'transparent') {
+                board.grid[[x, y]].transition()
+                    .duration(1000 * timeScale)
+                    .attr("opacity", 0);
+            } else {
+                const color = colorMap(prob);
+                board.grid[[x, y]].transition()
+                    .duration(1000 * timeScale)
+                    .attr("opacity", 1)
+                    .attr("fill", color);
+            }
+
+            if (tweenNumbers) {
+                const oldValue = board.valueGrid[[x, y]];
+                board.valueGrid[[x, y]] = prob;
+                board.textGrid[[x, y]].transition()
+                    //.duration(400 + (x + y) * 35)
+                    //.transition()
+                    //.duration(0)
+                    .duration(1000 * timeScale)
+                    .textTween(() => t => (100 * ((1 - t) * oldValue + t * prob)).toFixed(0));
+                    //.text((100 * prob).toFixed(0));
+                //board.textGrid[[x, y]].text((100 * prob).toFixed(0));
+            }
+        }
+    }
+}
+
+function squidsToCellColors(squids) {
+    const cellColors = {};
+    for (let y = 0; y < 8; y++)
+        for (let x = 0; x < 8; x++)
+            cellColors[[x, y]] = colorMap(0.0);
+
+    const lengthToColor = {2: "red", 3: "green", 4: "#33f"};
+    let squidLength = 2;
+    for (const squid of squids) {
+        let {x, y} = squid;
+        for (let i = 0; i < squidLength; i++) {
+            cellColors[[x, y]] = lengthToColor[squidLength];
+            if (squid.horizontal)
+                x++;
+            else
+                y++;
+        }
+        squidLength++;
+    }
+
+    return cellColors;
+}
+
+function setBoardSquids(board, squids) {
+    const cellColors = squidsToCellColors(squids);
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            board.grid[[x, y]].transition()
+                .duration(600)
+                .attr("fill", cellColors[[x, y]]);
+        }
+    }
+    board.cellColors = cellColors;
+}
+
+async function makeBoard(centerX, centerY, scale, root, timeScale, hideProbs, squids, skipGlow) {
+    timeScale = timeScale === undefined ? 1 : timeScale;
+    hideProbs = hideProbs === undefined ? false : hideProbs;
+    const cellColors = squids === undefined ? null : squidsToCellColors(squids);
+    skipGlow = skipGlow === undefined ? false : skipGlow;
+
+    root = root.append("g");
+    if (!skipGlow)
+        root.attr("filter", "url(#dropShadow)");
+    root.attr("transform", d3Transform()
+        .translate([centerX, centerY])
+        .translate(-S * 4, -S * 4)
+        .scale(scale)
+    );
+
+    // ['#004', '#070', '#090', '#0b0', '#0d0', '#0f0', '#6f6']
+    const grid = {};
+    const textGrid = {};
+    const valueGrid = {};
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            const rect = root.append("rect");
+            rect.attr("width", S).attr("height", S)
+                .attr("fill", cellColors === null ? "#004" : cellColors[[x, y]])
+                .attr("transform", d3Transform()
+                    .translate(x * S, y * S)
+                );
+            rect.attr("opacity", 0);
+            rect.transition()
+                .duration((600 + (x + y) * 35) * timeScale)
+                .transition()
+                .duration(1000 * timeScale)
+                .attr("opacity", 1);
+            grid[[x, y]] = rect;
+
+            const text = root.append("text");
+            text.text(hideProbs ? "" : "0")
+                .attr("x", 0).attr("y", 0)
+                .attr("font-family", "EB Garamond")
+                .attr("font-size", "15px")
+                .attr("font-style", "italic")
+                .attr("stroke", "white")
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("transform", d3Transform()
+                    .translate([x * S + S / 2, y * S + S / 2])
+                );
+            text.attr("opacity", 0);
+            text.transition()
+                .duration((200 + (x + y) * 35) * timeScale)
+                .transition()
+                .duration(1000 * timeScale)
+                .attr("opacity", 1);
+            textGrid[[x, y]] = text;
+            valueGrid[[x, y]] = 0;
+        }
+    }
+
+    for (let i = 0; i < 9; i++) {
+        const hrule = root.append("line")
+            .attr("x1", 0).attr("y1", S * i).attr("x2", 0).attr("y2", S * i)
+            .attr("stroke-width", 1).attr("stroke", "lightgray").attr("stroke-linecap", "round");
+        hrule.transition()
+            .duration(800 * timeScale)
+            .ease(d3.easeLinear)
+            .attr("x2", 8 * S)
+            .attr("opacity", 1)
+            .attr("stroke-width", 3);
+        const vrule = root.append("line")
+            .attr("x1", S * i).attr("y1", 0).attr("x2", S * i).attr("y2", 0)
+            .attr("stroke-width", 1).attr("stroke", "lightgray").attr("stroke-linecap", "round");
+        vrule.transition()
+            .duration(800 * timeScale)
+            .ease(d3.easeLinear)
+            .attr("y2", 8 * S)
+            .attr("opacity", 1)
+            .attr("stroke-width", 3);
+        await sleep(35 * timeScale);
+    }
+
+    return {root, grid, textGrid, valueGrid, cellColors};
+}
+
+// Idea: Show the histogram of actual board likelihoods.
+
+// Generate the Wichmann-Hill sequences.
+let x = 100, y = 100, z = 100;
+const rngSeq = [];
+for (let i = 0; i < 100; i++) {
+    x = (x * 171) % 30269;
+    y = (y * 172) % 30307;
+    z = (z * 170) % 30323;
+    const r = (x/30269 + y/30307 + z/30323) % 1.0;
+    rngSeq.push(r);
+}
+
+function getBigBoiCurlyTransforms(x, y, yScale, rotation) {
+    let translation = [x + 25, y + 18 - 7 * yScale];
+    if (rotation == -90)
+        translation = [x - 6 * yScale, y - 40];
+    return {
+        bracket: d3Transform()
+            .translate([x, y])
+            .rotate(rotation)
+            .scale(2, yScale),
+        t: d3Transform().translate(translation),
+    };
+}
+
+function makeBigBoiCurly(textGroup, x, y, yScale, label, rotation) {
+    rotation = rotation === undefined ? 0 : rotation;
+    const parent = textGroup.append("g");
+    const bracket = parent.append("text");
+    const transforms = getBigBoiCurlyTransforms(x, y, yScale, rotation);
+    bracket.text("}")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "90px")
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .attr("transform", transforms.bracket);
+    
+    const t = parent.append("text");
+    t.text(label)
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("transform", transforms.t);
+    if (rotation == -90)
+        t.attr("text-anchor", "middle");
+    parent.selectAll("text").transition()
+        .duration(1000)
+        .attr("fill-opacity", 1);
+    return {parent, bracket, t};
+}
+
+async function showRNGSequence(root) {
+    // Whoops, I decided I want to shift everything over...
+    root = root.append("g");
+    root.attr("transform", d3Transform().translate([100, 0]));
+
+    // Make the RNG table.
+    await sleep(250);
+    const tableGroup = root.append("g");
+    fadeIn(makeExtendoLine(-30, 0, 1200, 0, tableGroup)[0]);
+    fadeIn(makeExtendoLine(300, -80, 300, 850, tableGroup)[0]);
+    fadeIn(makeExtendoLine(660, -80, 660, 850, tableGroup)[0]);
+    tableGroup.attr("transform", d3Transform().translate([100, 140]));
+
+    await sleep(250);
+    const textGroup = tableGroup.append("g");
+    textGroup.append("text").text("RNG step #")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([0, -30])
+        );
+    textGroup.append("text").text("RNG output")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([330, -30])
+        );
+    textGroup.append("text").text("Use")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "60px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([690, -30])
+        );
+    textGroup.selectAll("text").transition()
+        .duration(1000)
+        .attr("fill-opacity", 1);
+
+    //await sleep(1000);
+    await nextSlide();
+    const uses = [];
+    const lineSpacing = 80;
+    function fillInRow(rowIndex, texts) {
+        let xOffsets = [0 + 100, 340, 690];
+        if (rowIndex == 10)
+            xOffsets = [0 + 85, 340 + 110, 690 + 30];
+        for (let i = 0; i < texts.length; i++) {
+            const text = textGroup.append("text");
+            text.text(texts[i])
+                .attr("x", 0).attr("y", 0)
+                .attr("font-family", "EB Garamond")
+                .attr("font-size", "60px")
+                .attr("transform", d3Transform()
+                    .translate([xOffsets[i], 60 + lineSpacing * rowIndex])
+                );
+            //if (i == 0)
+            //    text.attr("text-anchor", "right");
+            if (rowIndex !== 10)
+                text.attr("font-style", "italic");
+            if (i == 2)
+                uses.push(text);
+        }
+        textGroup.selectAll("text").transition()
+            .duration(600)
+            .attr("fill-opacity", 1);
+    }
+    for (let i = 0; i < 10; i++) {
+        fillInRow(i, [i, rngSeq[i].toFixed(8), ""]);
+        if (i == 0) {
+            //await sleep(1000);
+            await nextSlide();
+        }
+        await sleep(300);
+    }
+    fillInRow(10, ["⋮", "⋮", ""])
+
+    //await sleep(1000);
+    await nextSlide();
+    for (const use of uses.slice(0, -1)) {
+        use.attr("fill-opacity", 0);
+        use.text("???");
+        use.transition()
+            .duration(600)
+            .attr("fill-opacity", 1);
+        await sleep(200);
+    }
+
+    // Draw a big curly brace.
+    async function textFillLoop(offset, useTexts) {
+        for (let i = 0; i < useTexts.length; i++) {
+            uses[i + offset].transition()
+                .duration(300)
+                .attr("fill-opacity", 0)
+
+                .transition()
+                .duration(0)
+                .text(useTexts[i])
+
+                .transition()
+                .duration(300)
+                .attr("fill-opacity", 1);
+            await sleep(200);
+        }
+    }
+
+    //await sleep(3000);
+    await nextSlide();
+    //makeBigBoiCurly(textGroup, 1250, 180, 3.5, "Frame #1");
+    //makeBigBoiCurly(textGroup, 1250, 180 - 42, 2.75, "Frame #1");
+    makeBigBoiCurly(textGroup, 1250, 180 - 37, 2.75, "Frame #1");
+    textFillLoop(0, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity"]);
+
+    //await sleep(3000);
+    await nextSlide();
+    fadeIn(makeExtendoLine(660 + 900, 5 + lineSpacing * 3, 0, 5 + lineSpacing * 3, tableGroup, true)[0], 0.4);
+    //makeBigBoiCurly(textGroup, 1250, 480 - 70, 3.6, "Frame #2");
+    makeBigBoiCurly(textGroup, 1250, 480 - 50, 3.6, "Frame #2");
+    textFillLoop(3, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity", "Object lighting"]);
+
+    //await sleep(2000);
+    await nextSlide();
+    fadeIn(makeExtendoLine(660 + 900, 5 + lineSpacing * 7, 0, 5 + lineSpacing * 7, tableGroup, true)[0], 0.4);
+    //makeBigBoiCurly(textGroup, 1250, 780 - 70, 3.6, "Frame #3");
+    makeBigBoiCurly(textGroup, 1250, 780 - 30, 3.6, "Frame #3");
+    textFillLoop(7, ["Should Link blink?", "Should a rupee sparkle?", "Particle effect velocity", "⋮"]);
+    //await sleep(2000);
+    await nextSlide();
+}
+
+// From: https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
+var mulberry32State = 123456789;
+function RNG() {
+    var t = mulberry32State += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+
+// Make some random board layouts.
+function makeSquidLayout() {
+    const squidDescs = [];
+    for (let y = 0; y < 8; y++)
+        for (let x = 0; x < 8; x++)
+            for (const horizontal of [false, true])
+                squidDescs.push({x, y, horizontal});
+    let alreadyHit = {};
+    const layout = [];
+    for (const length of [2, 3, 4]) {
+        let newAlreadyHit;
+        rejection_sampling:
+        while (true) {
+            const desc = squidDescs[Math.floor(RNG() * squidDescs.length)];
+            let {x, y} = desc;
+            newAlreadyHit = {...alreadyHit};
+            for (let i = 0; i < length; i++) {
+                if (alreadyHit[[x, y]] || x > 7 || y > 7)
+                    continue rejection_sampling;
+                newAlreadyHit[[x, y]] = true;
+                if (desc.horizontal)
+                    x++;
+                else
+                    y++;
+            }
+            alreadyHit = newAlreadyHit;
+            layout.push(desc);
+            break;
+        }
+    }
+    return layout;
+}
+
+const exampleSquidLayouts = [];
+for (let i = 0; i < 1000; i++)
+    exampleSquidLayouts.push(makeSquidLayout());
+
+async function drawHit(root, x, y, scale, color) {
+    const parent = root.append("g");
+
+    const angle = i => 2 * Math.PI * (i / 16);
+    const pathFunction = d3.line()
+        .x((d, i) => d * Math.cos(angle(i)))
+        .y((d, i) => d * Math.sin(angle(i)))
+        .curve(d3.curveLinear);
+
+    const distances = [];
+    for (let i = 0; i < 4; i++)
+        distances.push(1, 0.5, 1.0, 0.5);
+    distances.push(1); // Ugh, there must be a d3 option to close the path. :/
+
+    parent.append("path")
+        .attr("d", pathFunction(distances))
+        .attr("stroke", "#c00")
+        .attr("fill", "orange")
+        .attr("stroke-linejoin", "round")
+        .attr("stroke-width", 0.15);
+
+    parent.attr("transform", d3Transform()
+        .translate([x, y])
+        .scale(0));
+
+    parent.transition()
+        .duration(600)
+        .attr("opactiy", 1)
+        .attr("transform", d3Transform()
+            .translate([x, y])
+            .scale(scale));
+    return parent;
+}
+
+function drawX(root, x, y, scale, color) {
+    const parent = root.append("g");
+    const backSlashUnder = parent.append("line")
+        .attr("x1", -1).attr("y1", -1).attr("x2", -1).attr("y2", -1)
+        .attr("stroke-width", 0.5).attr("stroke", "black").attr("stroke-linecap", "round");
+    backSlashUnder.transition()
+        .duration(500)
+        .attr("x2", 1)
+        .attr("y2", 1);
+
+    const slashUnder = parent.append("line")
+        .attr("x1", 1).attr("y1", -1).attr("x2", 1).attr("y2", -1)
+        .attr("stroke-width", 0.5).attr("stroke", "black").attr("stroke-linecap", "round");
+    slashUnder.attr("opacity", 0);
+    slashUnder.transition()
+        .duration(500)
+        .transition()
+        .duration(0)
+        .attr("opacity", 1)
+        .transition()
+        .duration(250)
+        .attr("x2", -1)
+        .attr("y2", 1);
+
+    const backSlashOver = parent.append("line")
+        .attr("x1", -1).attr("y1", -1).attr("x2", -1).attr("y2", -1)
+        .attr("stroke-width", 0.3).attr("stroke", color).attr("stroke-linecap", "round");
+    backSlashOver.transition()
+        .duration(500)
+        .attr("x2", 1)
+        .attr("y2", 1);
+
+    const slashOver = parent.append("line")
+        .attr("x1", 1).attr("y1", -1).attr("x2", 1).attr("y2", -1)
+        .attr("stroke-width", 0.3).attr("stroke", color).attr("stroke-linecap", "round");
+    slashOver.attr("opacity", 0);
+    slashOver.transition()
+        .duration(500)
+        .transition()
+        .duration(0)
+        .attr("opacity", 1)
+        .transition()
+        .duration(250)
+        .attr("x2", -1)
+        .attr("y2", 1);
+
+    parent.attr("transform", d3Transform()
+        .translate([x, y])
+        .scale(scale));
+    return parent;
+}
+
+async function drawHighlightCircle(root, x, y, scale, color) {
+    const parent = root.append("g");
+    const circ = parent.append("circle");
+    circ.attr("cx", 0).attr("cy", 0).attr("r", 1.0);
+    circ.attr("stroke-width", 0.3).attr("stroke", color).attr("fill", "none");
+    t = circ.transition()
+        .duration(500)
+        .attr("opacity", 1)
+        .attr("r", 1.5);
+    for (let i = 0; i < 2; i++)
+        t = t.transition()
+            .duration(500)
+            .attr("r", 1.0)
+            .transition()
+            .duration(500)
+            .attr("r", 1.5);
+    t.attr("opacity", 0);
+    parent.attr("transform", d3Transform()
+        .translate([x, y])
+        .scale(scale));
+    return parent;
+}
+
+async function showBoardAveraging(root) {
+    await sleep(250);
+
+    const board = await makeBoard(800, 350, 2, root, 1, true);
+
+    await nextSlide();
+    setBoardSquids(board, exampleSquidLayouts[0]);
+
+    await nextSlide();
+    setBoardSquids(board, exampleSquidLayouts[1]);
+
+    await nextSlide();
+    setBoardSquids(board, exampleSquidLayouts[2]);
+
+    await nextSlide();
+    board.root.transition()
+        .duration(1000).attr("transform", d3Transform()
+            .translate([1100, 100])
+            .scale(0.6));
+
+    const boards = [board];
+    for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 3; x++) {
+            if (x == 0 && y == 0)
+                continue
+            async function makeThisParticularBoard(x, y) {
+                const b = await makeBoard(1260 + 220 * x, 260 + 220 * y, 0.6, root, 0.4, true, exampleSquidLayouts[2 + x + y * 3]);
+                //b.root.attr("transform", d3Transform()
+                    //.translate([1100 + 220 * x, 100 + 220 * y])
+                    //.scale(0.6));
+                // I guess there's probably technically a race here,
+                // on this push. I don't particularly care.
+                boards.push(b);
+            }
+            makeThisParticularBoard(x, y);
+            await sleep(100);
+        }
+    }
+
+    await nextSlide();
+    const aggregationBoard = await makeBoard(400, 350, 2, root, 0.6);
+
+    // Change the boards from having squids to just probabilities.
+    await nextSlide();
+    for (const board of boards) {
+        setBoardProbabilities(board, (x, y) => {
+            return board.cellColors[[x, y]] === 'rgb(0, 0, 68)' ? 0 : 1;
+        }, false);
+        await sleep(200);
+    }
+
+    // Slide overlays of all of the boards onto the main board.
+    await nextSlide();
+    for (const board of boards)
+        board.filteredOut = false;
+
+    async function animateProbabComputation(slowFirstBoard) {
+        const overlays = [];
+        const overlayCells = [];
+        let boardCounter = 0;
+        for (const board of boards) {
+            if (board.filteredOut)
+                continue;
+            boardCounter++;
+            const timeScale = boardCounter <= 3 && slowFirstBoard ? 0.7 : Math.max(0.15, 0.5 - 0.08 * (boardCounter - 3));
+
+            const cloneRaw = board.root.node().cloneNode(true);
+            root.node().appendChild(cloneRaw);
+            const clone = d3.select(cloneRaw);
+            clone.attr("filter", "");
+            clone.attr("opacity", 0.9);
+            clone.transition()
+                .duration(3000 * timeScale)
+                .attr("transform", d3Transform()
+                    .translate([400, 350])
+                    .translate(-S * 4, -S * 4)
+                    .scale(2))
+                .attr("opacity", 0.8)
+                .transition()
+                .duration(500 * timeScale)
+                .attr("opacity", 0.0);
+            clone.selectAll("rect").each(function() {
+                rect = d3.select(this);
+                rect.attr("fill-opacity", 1);
+                if (rect.attr("fill") === "rgb(0, 0, 68)") {
+                    rect.transition()
+                        .duration(1000 * timeScale)
+                        .transition()
+                        .duration(2000 * timeScale)
+                        .attr("fill-opacity", 0);
+                } else {
+                    rect.transition()
+                        .duration(2500 * timeScale)
+                        .transition()
+                        .duration(1000 * timeScale)
+                        .attr("fill-opacity", 0);
+                }
+            });
+            clone.selectAll("line").each(function() {
+                line = d3.select(this);
+                line.attr("stroke-opacity", 1);
+                line.transition()
+                    .duration(5000 * timeScale)
+                    .attr("stroke-opacity", 0.5);
+            });
+            overlays.push(clone);
+            overlayCells.push(board.cellColors);
+
+            await sleep(2200 * timeScale);
+            setBoardProbabilities(aggregationBoard, (x, y) => {
+                let accum = 0;
+                for (const cellColors of overlayCells)
+                    accum += cellColors[[x, y]] === 'rgb(0, 0, 68)' ? 0 : 1;
+                return accum / overlayCells.length;
+            }, true, timeScale);
+
+            await sleep(1500 * timeScale);
+            //await nextSlide();
+        }
+    }
+    await animateProbabComputation(true);
+
+    // Draw an indicator on the highest probability cell.
+    await nextSlide();
+    drawHighlightCircle(root, 520, 470, 30, "yellow");
+
+    // Draw a miss.
+    await nextSlide();
+    drawX(root, 520, 470, 30, "white");
+
+    // X out the incompatible boards.
+    await nextSlide();
+    async function filterOutIncompatible(shootX, shootY, hit) {
+        let boardIndex = -1;
+        for (const board of boards) {
+            boardIndex++;
+            if (board.filteredOut)
+                continue;
+            const hitStatus = board.cellColors[[shootX, shootY]] !== 'rgb(0, 0, 68)';
+            if (hitStatus !== hit) {
+                x = boardIndex % 3;
+                y = Math.floor(boardIndex / 3);
+                drawX(root, 1100 + S*4 * 0.6 + 220 * x, 100 + S*4 * 0.6 + 220 * y, 70, "red");
+                await sleep(200);
+                board.filteredOut = true;
+                board.root.attr("opacity", 1);
+                board.root.transition()
+                    .duration(1000)
+                    .attr("opacity", 0.4);
+            }
+        }
+    }
+    await filterOutIncompatible(3, 3, false);
+
+    // Recompute the probabilities.
+    await nextSlide();
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        return 0;
+    }, true, 1);
+    await sleep(2000);
+    await animateProbabComputation(false);
+
+    // Draw an indicator on the highest probability cell.
+    await nextSlide();
+    drawHighlightCircle(root, 520 - S*2, 470 - S*2, 30, "yellow");
+
+
+    // Draw a hit.
+    await nextSlide();
+    drawHit(root, 520 - S*2, 470 - S*2, 45);
+
+    // Filter out boards without a hit.
+    await nextSlide();
+    await filterOutIncompatible(2, 2, true);
+
+    // Recompute the probabilities.
+    await nextSlide();
+    globalTimeScale *= 0.5;
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        return 0;
+    }, true, 1);
+    await sleep(2000);
+    await animateProbabComputation(false);
+    globalTimeScale *= 2;
+
+
+    // Draw a hit.
+    await nextSlide();
+    drawHit(root, 520 - S*2, 470, 45);
+
+    // Filter out boards without a hit.
+    await nextSlide();
+    await filterOutIncompatible(2, 3, true);
+    // Recompute the probabilities.
+    await sleep(1000);
+    globalTimeScale *= 0.5;
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        return 0;
+    }, true, 1);
+    await sleep(2000);
+    await animateProbabComputation(false);
+    globalTimeScale *= 2;
+
+    // Draw a miss.
+    await nextSlide();
+    drawX(root, 520 - 2 * S*2, 470, 30, "white");
+    // Filter out boards with a hit.
+    await sleep(1000);
+    await filterOutIncompatible(1, 3, false);
+    // Recompute the probabilities.
+    await sleep(1000);
+    globalTimeScale *= 0.5;
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        return 0;
+    }, true, 1);
+    await sleep(2000);
+    await animateProbabComputation(false);
+    globalTimeScale *= 2;
+
+    // Fill in the remaining hits.
+    await nextSlide();
+    for (const [x, y] of [
+        [4, 4], [4, 5], [4, 6],
+        [5, 3], [5, 4], [5, 5], [5, 6],
+    ]) {
+        drawHit(root, 280 + x * S*2, 230 + y * S*2, 45);
+        await sleep(100);
+    }
+
+    await nextSlide();
+}
+
+async function showBoardSequence(root) {
+    // Draw a board.
+    await sleep(250);
+
+    const board = await makeBoard(800, 350, 2, root, 1, true);
+
+    // Shift the board over to the left.
+    //await sleep(1500);
+    await nextSlide();
+    board.root.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([100, 350]));
+
+    // Start making new boards.
+    await sleep(1500);
+    //await nextSlide();
+    for (let i = 0; i < 3; i++) {
+        const board = await makeBoard(260 + (i + 1) * 380, 510, 1, root, 1, true);
+        //board.root.attr("transform", d3Transform().translate([100 + (i + 1) * 380, 350]));
+        await sleep(200);
+    }
+    // Make an ellipsis.
+    const ellipsis = root.append("g");
+    ellipsis.attr("transform", d3Transform().translate([120 + 4 * 380, 350 + S * 4]));
+    for (let i = 0; i < 3; i++) {
+        const circle = ellipsis.append("circle");
+        circle.attr("cx", i * 50).attr("cy", 0).attr("r", 8)
+            .attr("fill", "white").attr("fill-opacity", 0);
+        circle.transition()
+            .duration(500 + 120 * i)
+            .transition()
+            .duration(800)
+            .attr("fill-opacity", 1);
+    }
+
+    //await sleep(2000);
+    await nextSlide();
+    ellipsis.selectAll("circle")
+        .transition()
+        .duration(1000)
+        .attr("fill-opacity", 0);
+    //svg.selectAll(ellipsis).remove();
+
+    /*
+    while (true) {
+        await sleep(2000);
+        setBoardProbabilities(board, (x, y) => {
+            return Math.random() * Math.random();
+        });
+    }
+    //*/
+
+    return;
+}
+
+// Note for accuracy:
+// The RNG steps: [13, 26, 42, 52, 58] ...
+// ... give the boards: [524129, 575982, 387644, 492053, 451312]
+
+async function showBoardSampling(root) {
+    // Make the axis arrows pop in.
+    await sleep(250);
+    const axisGroup = root.append("g");
+    fadeIn(makeExtendoArrow(0, 0, 1750, 0, axisGroup)[0]);
+    //axisGroup.attr("transform", d3Transform().translate([60, 950]));
+    axisGroup.attr("transform", d3Transform().translate([60, 200]));
+
+    // Make little tick marks appear.
+    await sleep(1000);
+    const ticksGroup = axisGroup.append("g");
+    for (let i = 0; i < 87; i++) {
+        await sleep(10);
+
+        const x = 10 + 20 * i
+
+        const tick = ticksGroup.append("line")
+            .attr("x1", x).attr("y1", 0).attr("x2", x).attr("y2", 0)
+            .attr("stroke-width", 0).attr("stroke", "black").attr("stroke-linecap", "round")
+            .attr("fill", "none");
+        if (i % 5 == 0) {
+            tick.transition()
+                .duration(500)
+                .attr("stroke-width", 3)
+                .attr("y2", 20);
+            const t = axisGroup.append("text");
+            t.text("" + i)
+                .attr("x", 0).attr("y", 0)
+                .attr("font-family", "EB Garamond")
+                .attr("font-size", "40px")
+                .attr("font-style", "italic")
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("transform", d3Transform()
+                    .translate([x, 50])
+                );
+            t.transition()
+                .duration(1000)
+                .attr("fill-opacity", 1);
+        } else {
+            tick.transition()
+                .duration(500)
+                .attr("stroke-width", 2)
+                .attr("y2", 15);
+        }
+    }
+
+    //await sleep(1000);
+    await nextSlide();
+    makeBigBoiCurly(axisGroup, 162, -35, 3.3, "Frame #1", -90);
+
+    // Show the board.
+    //await sleep(1000);
+    await nextSlide();
+    const indicatorPath = axisGroup.append("path");
+    const pathFunction = d3.line()
+        .x(function(d, i) { return 20 * d + 12; })
+        .y(function(d, i) { return +75 * i + 10; })
+        .curve(d3.curveBasis);
+    let pathData = [13, 15, 38 - 1.5, 40 - 1.5];
+    indicatorPath.attr("d", pathFunction(pathData))
+        .attr("stroke-width", 8).attr("stroke", "black").attr("stroke-linecap", "round")
+        .attr("fill", "none").attr("marker-end", "url(#arrowHead)");
+    indicatorPath.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+
+    const board = await makeBoard(20 * 40 + 12 - 80, 550 - 80, 1.5, axisGroup, 1, true);
+    await sleep(1500); // XXX: This value must wait for the board to fully color!
+    setBoardSquids(board, [
+        {x: 3, y: 6, horizontal: true},
+        {x: 6, y: 4, horizontal: false},
+        {x: 1, y: 2, horizontal: true},
+    ]);
+    await nextSlide();
+    const genParent = axisGroup.append("g");
+    makeBigBoiCurly(genParent, 162 + 62, -35, 4.6, "Board gen", -90);
+    genParent.attr("transform", d3Transform().translate([20 * 13, 0]));
+
+    //await sleep(1000);
+    await nextSlide();
+    makeBigBoiCurly(axisGroup, 162 + 20 * 13, -35, 3.3, "Frame #2", -90);
+    pathData = [26, 28, 38 - 1.5, 40 - 1.5];
+    indicatorPath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData));
+    genParent.transition()
+        .duration(1000)
+        .attr("transform", d3Transform()
+            .translate([20 * 26, 0])
+        );
+    setBoardSquids(board, [
+        {x: 2, y: 7, horizontal: true},
+        {x: 0, y: 0, horizontal: false},
+        {x: 3, y: 0, horizontal: false},
+    ]);
+
+    //await sleep(1000);
+    await nextSlide();
+    makeBigBoiCurly(axisGroup, 162 + 20 * 28 - 2, -35, 4.1, "Frame #3", -90);
+    pathData = [42, 41, 41 + 0.5, 40 + 0.5];
+    indicatorPath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData));
+    genParent.transition()
+        .duration(1000)
+        .attr("transform", d3Transform()
+            .translate([20 * 42, 0])
+        );
+    setBoardSquids(board, [
+        {x: 6, y: 4, horizontal: false},
+        {x: 0, y: 3, horizontal: false},
+        {x: 1, y: 4, horizontal: false},
+    ]);
+
+    //await sleep(1000);
+    await nextSlide();
+    const frame4 = makeBigBoiCurly(axisGroup, 162 + 20 * 40 + 8, -35, 2.55, "Frame #4", -90);
+    pathData = [52, 50, 42 + 1.5, 40 + 1.5];
+    indicatorPath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData));
+    genParent.transition()
+        .duration(1000)
+        .attr("transform", d3Transform()
+            .translate([20 * 52, 0])
+        );
+
+    setBoardSquids(board, [
+        {x: 0, y: 6, horizontal: true},
+        {x: 4, y: 5, horizontal: true},
+        {x: 5, y: 1, horizontal: false},
+    ]);
+
+    // Show how a frame can be variable.
+    //await sleep(1000);
+    await nextSlide();
+    const newFrame4Transforms = getBigBoiCurlyTransforms(162 + 20 * 44 - 2, -35, 4.1, -90);
+    frame4.bracket.transition()
+        .duration(1000)
+        .attr("transform", newFrame4Transforms.bracket);
+    frame4.t.transition()
+        .duration(1000)
+        .attr("transform", newFrame4Transforms.t);
+    pathData = [58, 56, 42 + 1.5, 40 + 1.5];
+    indicatorPath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData));
+    genParent.transition()
+        .duration(1000)
+        .attr("transform", d3Transform()
+            .translate([20 * 58, 0])
+        );
+
+    setBoardSquids(board, [
+        {x: 4, y: 5, horizontal: true},
+        {x: 5, y: 2, horizontal: false},
+        {x: 1, y: 0, horizontal: false},
+    ]);
+
+    await nextSlide();
+}
+
+async function showFirstBoardProgression(root) {
+    // Make the axis arrows pop in.
+    await sleep(250);
+    const axisGroup = root.append("g");
+    fadeIn(makeExtendoArrow(-30, 0, 1000, 0, axisGroup)[0]);
+    fadeIn(makeExtendoArrow(0, 30, 0, -500, axisGroup)[0]);
+    axisGroup.attr("transform", d3Transform().scale(1.5).translate([135, 570]));
+
+    // Make the axis labels appear.
+    await sleep(1000);
+    const textGroup = axisGroup.append("g");
+    const numRNGStepsText = textGroup.append("text")
+        .text("Number of RNG steps")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "40px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([50 - 160, 120])
+        );
+    textGroup.append("text").text("0%")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "25px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([-45, -15])
+        );
+    textGroup.append("text").text("Probability")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "40px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([-40, -60])
+            .rotate(-90)
+        );
+    textGroup.selectAll("text").transition()
+        .duration(500)
+        .attr("fill-opacity", 1);
+
+    // Make the zero level pop in.
+    const zeroLevel = axisGroup.append("line")
+        .attr("x1", 0).attr("y1", -20).attr("x2", 0).attr("y2", -20)
+        .attr("stroke-width", 1).attr("stroke", "black").attr("stroke-linecap", "round")
+        .attr("stroke-dasharray", 10);
+    zeroLevel
+        .transition()
+        .duration(1000)
+        .attr("x2", 980)
+        .attr("opacity", 1)
+        .attr("stroke-width", 3);
+
+    const tickTextGroup = axisGroup.append("g");
+
+    var bellCurvePath = null;
+
+    // Make little tick marks appear.
+    await sleep(1000);
+
+    // Make strategic reserves of ticks.
+    const ticksGroup = axisGroup.append("g");
+    ticksGroup.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    const tickReserves = [];
+    for (let i = 0; i < 400; i++) {
+        const tick = ticksGroup.append("line")
+            .attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 15)
+            .attr("stroke-width", 2).attr("stroke", "black").attr("stroke-linecap", "round")
+            .attr("opacity", 0).attr("fill", "none");
+        tickReserves.push(tick);
+    }
+    const textReserves = [];
+    for (let i = 0; i < 50; i++) {
+        const text = ticksGroup.append("text").text("?")
+            .attr("x", 0).attr("y", 0)
+            .attr("font-family", "EB Garamond")
+            .attr("font-size", "30px")
+            //.attr("font-family", "monospace")
+            //.attr("font-size", "20px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle");
+        textReserves.push(text);
+    }
+
+    const proxyParameterObject = root.append("g");
+    proxyParameterObject.attr("x", 0).attr("y", Math.log(1/30));
+    const getAxisParameters = elapsed => {
+        const scale = Math.max(1/30, Math.exp(+proxyParameterObject.attr("y")));
+        return {
+            left: +proxyParameterObject.attr("x") - scale * 15,
+            scale,
+        }
+    };
+
+    function renderNumber(scale, xWorldSpace) {
+        if (xWorldSpace >= 1e6) {
+            let s = (xWorldSpace / 1e6).toFixed(3);
+            while (s.endsWith("0"))
+                s = s.slice(0, -1);
+            if (s.endsWith("0"))
+                s = s.slice(0, -1);
+            return s + "M"
+        }
+        return Math.round(Math.max(0, xWorldSpace)).toLocaleString();
+        //return "" + Math.round(xWorldSpace);
+    }
+
+    var startTimestamp = null;
+    var prevParams = null;
+    var pleaseUpdateTheBellCurve = false;
+    var pleaseExit = false;
+    const moveAxes = timestamp => {
+        if (pleaseExit)
+            return;
+        window.requestAnimationFrame(moveAxes);
+
+        if (startTimestamp === null)
+            startTimestamp = timestamp;
+        const elapsed = timestamp - startTimestamp;
+        if (keysHeld.has("a") || keysHeld.has("d")) {
+            let scale = Math.exp(proxyParameterObject.attr("y"));
+            scale *= keysHeld.has("d") - keysHeld.has("a");
+            proxyParameterObject.attr("x", (+proxyParameterObject.attr("x")) + scale * 10);
+        }
+        if (keysHeld.has("w") || keysHeld.has("s")) {
+            let scale = keysHeld.has("s") - keysHeld.has("w");
+            proxyParameterObject.attr("y", (+proxyParameterObject.attr("y")) + scale * 0.01);
+        }
+
+        const params = getAxisParameters(timestamp);
+        if (prevParams !== null && params.left === prevParams.left && params.scale === prevParams.scale)
+            return;
+        prevParams = params;
+        const splitBase = 10;
+        // Round params.scale down to a power of 5.
+        // This is the spacing in world-space units that we have a rendered tick for.
+        const logScale = Math.log(params.scale * 30) / Math.log(splitBase);
+        const smallestTickSpacingWorldSpace = Math.round(Math.exp(
+            Math.floor(logScale) * Math.log(splitBase)
+        ));
+        const sizingError = logScale - Math.floor(logScale);
+        // Round params.left down to a multiple of smallestTickSpacingWorldSpace.
+        // This is the world-space offset of the leftmost tick we draw.
+        let tickIndex = Math.ceil(params.left / smallestTickSpacingWorldSpace);
+        let xWorldSpace = tickIndex * smallestTickSpacingWorldSpace;
+        let ticksConsumed = 0;
+        let textConsumed = 0;
+        while (ticksConsumed < tickReserves.length) {
+            if (xWorldSpace === 0)
+                window.msg = true;
+            const tickXScreenSpace = (xWorldSpace - params.left) / params.scale;
+            if (tickXScreenSpace > 990)
+                break;
+            let tickSizeCategory = 1;
+            if (tickIndex % splitBase === 0)
+                tickSizeCategory = 2;
+            if (tickIndex % Math.pow(splitBase, 2) === 0)
+                tickSizeCategory = 3;
+            tickSizeCategory -= sizingError;
+            if (xWorldSpace === 0)
+                tickSizeCategory = 3;
+
+            let textSizeCategory = tickSizeCategory;
+            // This bonus only applies when splitBase is even.
+            if (
+                tickIndex % splitBase === splitBase / 2 ||
+                tickIndex % Math.pow(splitBase, 2) === Math.pow(splitBase, 2) / 2 ||
+                tickIndex % Math.pow(splitBase, 3) === Math.pow(splitBase, 3) / 2
+            )
+                textSizeCategory += 0.65;
+
+            // Do a non-linear transform on the tick size categories to squish it from [0, 2] up more towards the high end of that range.
+            tickSizeCategory = Math.sqrt(tickSizeCategory / 2) * 2;
+            // Fade out the ticks near the right end of the scale.
+            const fadeOutDistance = 100;
+            const leftFadeOpacity = Math.pow(clamp(tickXScreenSpace / fadeOutDistance), 1.5);
+            const rightFadeOpacity = Math.pow(clamp(1 - (tickXScreenSpace - 990 + fadeOutDistance) / fadeOutDistance), 1.5);
+            let masterOpacity = xWorldSpace >= 0 ? 1 : 0;
+
+            // Don't draw turbo-tiny ticks.
+            if (tickSizeCategory > 0.05) {
+                const tick = tickReserves[ticksConsumed];
+                tick.attr("opacity", masterOpacity * rightFadeOpacity).attr("x1", tickXScreenSpace).attr("x2", tickXScreenSpace);
+                tick.attr("stroke-width", 1 + tickSizeCategory * 1.5);
+                tick.attr("y2", 10 * Math.pow(tickSizeCategory, 0.75));
+                ticksConsumed++;
+            }
+
+            if (textSizeCategory > 1.3) {
+                const text = textReserves[textConsumed++];
+                const textOpacity = clamp(textSizeCategory - 1.3);
+                const textValue = renderNumber(params.scale, xWorldSpace);
+                if (text !== undefined)
+                    text.text(textValue)
+                        .attr("opacity",
+                            masterOpacity *
+                            (textValue === "0" ? 1 : leftFadeOpacity) *
+                            rightFadeOpacity *
+                            textOpacity
+                        )
+                        .attr("x", tickXScreenSpace).attr("y", 55);
+            }
+
+            xWorldSpace += smallestTickSpacingWorldSpace;
+            tickIndex++;
+        }
+        while (ticksConsumed < tickReserves.length)
+            tickReserves[ticksConsumed++].attr("opacity", 0);
+        while (textConsumed < textReserves.length)
+            textReserves[textConsumed++].attr("opacity", 0);
+
+        // Update the curve, if relevant.
+        if (bellCurvePath !== null && pleaseUpdateTheBellCurve) {
+            const pathData = [0];
+            for (let i = 1; i < 499; i++) {
+                const wsx = params.left + 1000 * params.scale * (i / 500);
+                const x = (5.5e6 - wsx) / 100e3;
+                pathData.push(300 * Math.exp(-x*x));
+            }
+            pathData.push(0);
+            bellCurvePath.attr("d", pathFunction(pathData));
+        }
+    };
+    window.requestAnimationFrame(moveAxes);
+
+    function shiftAxisScale(left, scale, duration) {
+        proxyParameterObject.transition()
+            .duration(duration)
+            .attr("x", left)
+            .attr("y", Math.log(scale));
+        return sleep(duration);
+    }
+
+    // Show some example boards at the bottom.
+    await nextSlide();
+    const demoBoardGroup = axisGroup.append("g");
+    const demoBoards = [];
+    for (let i = 0; i < 33; i++) {
+        //+ (i % 2 === 0 ? 0 : 120)
+        //makeBoard(220 + 140 * i, -170, 0.3, axisGroup, 0.4, true, exampleSquidLayouts[i]);
+        async function asyncMakeBoard() {
+            const board = await makeBoard(150 + 13 + 30 * i, +145 +75, 0.08, demoBoardGroup, 0.4, true, exampleSquidLayouts[i]);
+            demoBoards.push(board);
+        }
+        asyncMakeBoard();
+        await sleep(15);
+    }
+
+    // Zoom in on the boards
+    await nextSlide();
+    axisGroup.transition()
+        .duration(1500)
+        .attr("transform", d3Transform().scale(8).translate([-100, +15]))
+        .transition()
+        .duration(4000)
+        .attr("transform", d3Transform().scale(8).translate([-300, +15]));
+    await sleep(5500);
+
+    // Zoom back out to the default camera position.
+    await nextSlide();
+    axisGroup.transition()
+        .duration(2000)
+        .attr("transform", d3Transform().scale(1.5).translate([135, 570]));
+    await sleep(2000);
+
+    // Show an example distribution over boards.
+    await nextSlide();
+    const bellCurveGroup = axisGroup.append("g"); // I want this just to animate opacity separately.
+    let pathData = [];
+    for (let i = 0; i < 500; i++) {
+        const x = (234 - i) / 30;
+        pathData.push(300 * Math.exp(-x*x));
+    }
+    const pathFunction = d3.line()
+        .x(function(d, i) { return 1.9 * i; })
+        .y(function(d, i) { return -d; })
+        .curve(d3.curveLinear);
+        //.curve(d3.curveBasis);
+    bellCurvePath = bellCurveGroup.append("path");
+    bellCurvePath.attr("d", pathFunction(pathData))
+        .attr("stroke-width", 4).attr("stroke", "#22f").attr("stroke-linecap", "round").attr("stroke-opacity", 0.6)
+        .attr("fill", "blue");
+    const length = bellCurvePath.node().getTotalLength();
+    bellCurvePath.attr("stroke-dasharray", length).attr("stroke-dashoffset", length);
+    bellCurvePath.attr("transform", d3Transform()
+        .translate([20, -20])
+    );
+    bellCurveGroup
+        .transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    bellCurvePath
+        .transition()
+        .duration(2000)
+        .attr("stroke-dashoffset", 0)
+        .attr("fill-opacity", 0.2);
+
+    // Make a board to average probabilities on.
+    await nextSlide();
+    const aggregationBoard = await makeBoard(230, -300, 0.8, demoBoardGroup, 1, false);
+
+    // Change the boards from having squids to just probabilities.
+    await nextSlide();
+    for (const board of demoBoards) {
+        setBoardProbabilities(board, (x, y) => {
+            return board.cellColors[[x, y]] === 'rgb(0, 0, 68)' ? 0 : 1;
+        }, false);
+        await sleep(50);
+    }
+
+    // Average together the boards under the curve.
+    await nextSlide();
+    const overlayCells = [];
+    let boardCounter = 0;
+    const timeScale = 1;
+    // This isn't just equal to the above rendered curve for artistic reasons.
+    const boardIndexToWeight = i => {
+        const x = (15 - i) / 4.0;
+        return Math.exp(-x*x);
+    };
+    for (let i = 10; i < 21; i++) {
+        const cloneRaw = demoBoards[i].root.node().cloneNode(true);
+        demoBoardGroup.node().appendChild(cloneRaw);
+        const clone = d3.select(cloneRaw);
+        clone.attr("filter", "");
+        clone.attr("opacity", 0.8 * boardIndexToWeight(i));
+        clone.transition()
+            .duration(3000 * timeScale)
+            .attr("transform", aggregationBoard.root.attr("transform"))
+            .attr("opacity", 0.3 * boardIndexToWeight(i))
+            .transition()
+            .duration(500 * timeScale)
+            .attr("opacity", 0.0);
+        clone.selectAll("rect").each(function() {
+            rect = d3.select(this);
+            rect.attr("fill-opacity", 1);
+            if (rect.attr("fill") === "rgb(0, 0, 68)") {
+                rect.transition()
+                    .duration(1000 * timeScale)
+                    .transition()
+                    .duration(2000 * timeScale)
+                    .attr("fill-opacity", 0);
+            } else {
+                rect.transition()
+                    .duration(2500 * timeScale)
+                    .transition()
+                    .duration(1000 * timeScale)
+                    .attr("fill-opacity", 0);
+            }
+        });
+        clone.selectAll("line").each(function() {
+            line = d3.select(this);
+            line.attr("stroke-opacity", 1);
+            line.transition()
+                .duration(5000 * timeScale)
+                .attr("stroke-opacity", 0.5);
+        });
+        overlayCells.push({cellColors: demoBoards[i].cellColors, weight: boardIndexToWeight(i)});
+        //await sleep(1500 * timeScale);
+        //await nextSlide();
+    }
+    await sleep(2200 * timeScale);
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        let accum = 0;
+        let denom = 0;
+        for (const {cellColors, weight} of overlayCells) {
+            accum += weight * (cellColors[[x, y]] === 'rgb(0, 0, 68)' ? 0 : 1);
+            denom += weight;
+        }
+        return accum / denom;
+    }, true, timeScale);
+
+    // Hide all the nonsense we were just looking at.
+    await nextSlide();
+    /*
+    demoBoardGroup.attr("opacity", 1);
+    demoBoardGroup.transition()
+        .duration(1000)
+        .attr("opacity", 0);
+    */
+    for (const b of demoBoards) {
+        b.root.attr("opacity", 1);
+        b.root.transition()
+            .duration(1000)
+            .attr("opacity", 0);
+    }
+    await sleep(1000);
+    for (const b of demoBoards)
+        b.root.remove();
+    //demoBoardGroup.remove();
+    // Clear out the path.
+    pathData = [];
+    for (let i = 0; i < 500; i++)
+        pathData.push(0);
+    bellCurvePath.transition()
+        .duration(1000)
+        .attr("d", pathFunction(pathData))
+    await sleep(1000);
+    // Switch the bell curve over to per-frame control by our animation loop.
+    // This also requires us to disable the line dashing.
+    pleaseUpdateTheBellCurve = true;
+    bellCurvePath.attr("stroke-dasharray", "");
+
+    await nextSlide();
+    await shiftAxisScale(0, 8000, 10000);
+
+    await nextSlide();
+    await shiftAxisScale(4.5e6, 2000, 5000);
+    await shiftAxisScale(5.1e6, 700, 5000);
+
+    // Show how we just get mush.
+    await nextSlide();
+    setBoardProbabilities(aggregationBoard, (x, y) => {
+        const mush = {"0,0": 0.0673, "1,0": 0.0991, "2,0": 0.1225, "3,0": 0.1360,
+                                     "1,1": 0.1277, "2,1": 0.1489, "3,1": 0.1611,
+                                                    "2,2": 0.1686, "3,2": 0.1800,
+                                                                   "3,3": 0.1913};
+        for (const flip of [false, true]) {
+            for (let _x of [x, 7 - x]) {
+                for (let _y of [y, 7 - y]) {
+                    const pair = flip ? [_y, _x] : [_x, _y];
+                    if (pair in mush)
+                        return mush[pair];
+                }
+            }
+        }
+    }, true, timeScale);
+
+    //await nextSlide();
+    //shiftAxisScale(4.6474e6, 37, 10000);
+
+    // Kill the animation frame loop.
+    pleaseExit = true;
+    await nextSlide();
+}
+
+const videoElem = document.getElementById("gameClip");
+const pausaIndicatorContainer = document.getElementById("pausaIndicatorContainer");
+
+var globalViewBox = null;
+var viewBoxIsLarge = true;
+function toggleViewBoxSizing() {
+    if (globalViewBox === null)
+        return;
+    if (viewBoxIsLarge) {
+        globalViewBox.transition()
+            .duration(1500)
+            /*
+            .attr("x", 1035).attr("y", 20)
+            .attr("width", 1920 * 0.9 * 0.5).attr("height", 1080 * 0.9 * 0.5);
+            */
+            .attr("x", 1130).attr("y", 20)
+            .attr("width", 1920 * 0.8 * 0.5).attr("height", 1080 * 0.8 * 0.5);
+    } else {
+        /*
+        globalViewBox.transition()
+            .duration(1500)
+            .attr("x", 1920 * 0.05).attr("y", 1080 * 0.05)
+            .attr("width", 1920 * 0.9).attr("height", 1080 * 0.9);
+        */
+        globalViewBox.transition()
+            .duration(1500)
+            .attr("x", 1920 * (0.05 + 0.9 * 0.1)).attr("y", 1080 * 0.05)
+            .attr("width", 1920 * 0.9 * 0.8).attr("height", 1080 * 0.9 * 0.8);
+    }
+    viewBoxIsLarge = !viewBoxIsLarge;
+}
+
+// From: https://stackoverflow.com/questions/38224875/replacing-d3-transform-in-d3-v4
+// Why did they get rid of this in D3 v4!? :(
+function getTranslation(transform) {
+    // Create a dummy g for calculation purposes only. This will never
+    // be appended to the DOM and will be discarded once this function
+    // returns.
+    var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+    // Set the transform attribute to the provided string value.
+    g.setAttributeNS(null, "transform", transform);
+
+    // consolidate the SVGTransformList containing all transformations
+    // to a single SVGTransform of type SVG_TRANSFORM_MATRIX and get
+    // its SVGMatrix.
+    var matrix = g.transform.baseVal.consolidate().matrix;
+
+    // As per definition values e and f are the ones for the translation.
+    return [matrix.e, matrix.f];
+}
+
+async function showPDFs(root) {
+    await sleep(250);
+    // Make a view box appear.
+    const viewBox = root.append("rect")
+        .attr("x", 1920 * 0.05).attr("y", 1080 * 0.05)
+        .attr("width", 1920 * 0.9).attr("height", 1080 * 0.9).attr("fill", "#333");
+    viewBox.transition()
+        .duration(1500)
+        .attr("opacity", 1);
+    globalViewBox = viewBox;
+
+    var startTimestamp = null;
+    var startVideoFadeout = false;
+    var videoFadeoutTimestamp = null;
+    smoothGameClipMotion = timestamp => {
+        if (startTimestamp === null)
+            startTimestamp = timestamp;
+        const elapsed = timestamp - startTimestamp;
+        const boundingRect = viewBox.node().getBoundingClientRect();
+        let x = boundingRect.left;
+        let y = boundingRect.top;
+        let scale = (boundingRect.bottom - y) / 1440;
+        scale *= 16 / 9;
+        let opacity = elapsed / 1000;
+        if (startVideoFadeout) {
+            if (videoFadeoutTimestamp === null)
+                videoFadeoutTimestamp = timestamp;
+            const fadeoutElapsed = timestamp - videoFadeoutTimestamp;
+            opacity = 1 - fadeoutElapsed / 1000;
+            // Kill this callback after we fully fade out.
+            if (fadeoutElapsed > 1100)
+                return;
+        }
+        // This element scales relative to its middle, so we correct for that.
+        x -= 1440 * (1 - scale) / 2;
+        y -= 810 * (1 - scale) / 2;
+        videoElem.style.transform = "translate(" + x + "px, " + y + "px) scale(" + scale + ")";
+        videoElem.style.opacity = clamp(opacity);
+        pausaIndicatorContainer.style.transform = "translate(" + x + "px, " + y + "px) scale(" + scale + ")";
+        pausaIndicatorContainer.style.opacity = clamp(opacity);
+        window.requestAnimationFrame(smoothGameClipMotion);
+    }
+    window.requestAnimationFrame(smoothGameClipMotion);
+    //videoElem.play();
+
+    // Slide the viewbox slightly up to accomodate the timeline.
+    await nextSlide("Move Linkus up.");
+    globalViewBox.transition()
+        .duration(1500)
+        .attr("x", 1920 * (0.05 + 0.9 * 0.1)).attr("y", 1080 * 0.05)
+        .attr("width", 1920 * 0.9 * 0.8).attr("height", 1080 * 0.9 * 0.8);
+
+    // Draw the main timeline.
+    await nextSlide("Create the timeline.");
+    const timelineGroup = root.append("g");
+    timelineGroup.attr("transform", d3Transform().scale(1.4).translate([50, 730]));
+    //fadeIn(makeExtendoLine(0, -15, 0, 15, timelineGroup)[0]);
+    //await sleep(250);
+    fadeIn(makeExtendoLine(0, 0, 150, 0, timelineGroup)[0]);
+    await sleep(250);
+
+    const timelineNameToX = {};
+    async function addTimelineEvent(x, eventTexts, textShift, dLeft, dRight) {
+        // Flag pole.
+        timelineGroup.append("line")
+            .attr("x1", x).attr("y1", -20).attr("x2", x).attr("y2", -20)
+            .attr("stroke-width", 1).attr("stroke", "black").attr("stroke-linecap", "round")
+            .transition().duration(600)
+            .attr("y2", 0)
+            .attr("opacity", 1)
+            .attr("stroke-width", 2);
+        // Text base.
+        timelineGroup.append("line")
+            .attr("x1", x).attr("y1", -20).attr("x2", x).attr("y2", -20)
+            .attr("stroke-width", 1).attr("stroke", "black").attr("stroke-linecap", "round")
+            .transition().duration(600)
+            .attr("x1", x - dLeft).attr("x2", x + dRight)
+            .attr("opacity", 1)
+            .attr("stroke-width", 2);
+        await sleep(400);
+        let i = eventTexts.length - 1;
+        for (const s of eventTexts) {
+            timelineNameToX[s] = x;
+            timelineGroup.append("text").text(s)
+                .attr("x", x + textShift).attr("y", -33 - 30 * i)
+                .attr("font-family", "EB Garamond")
+                .attr("font-size", "25px")
+                .attr("font-style", "italic")
+                .attr("text-anchor", "middle")
+                .transition()
+                .duration(500)
+                .attr("fill-opacity", 1);
+            i--;
+        }
+    }
+
+    async function emphasizeTimelineRegion(name1, name2) {
+        const x1 = timelineNameToX[name1];
+        const x2 = timelineNameToX[name2];
+        const paths = [];
+        const emphDuration = 3000;
+        for (const props of [
+            {strokeWidth: 8, opacity: 0.6, pwm: 0.7},
+            {strokeWidth: 13, opacity: 0.2, pwm: 0.6},
+            {strokeWidth: 20, opacity: 0.1, pwm: 0.2},
+        ]) {
+            const emphPath = timelineGroup.append("path");
+            emphPath.attr("d", `M ${x2} 0 L ${x1} 0`)
+                .attr("stroke-width", props.strokeWidth).attr("stroke", "#22f").attr("stroke-linecap", "round")
+                .attr("fill", "none");
+            const length = emphPath.node().getTotalLength();
+            emphPath.attr("stroke-dasharray", `${0.1 * props.pwm * length} ${0.1 * (1 - props.pwm) * length}`).attr("stroke-dashoffset", 0);
+            emphPath
+                .transition()
+                .duration(0.2 * emphDuration)
+                .ease(d3.easeLinear)
+                .attr("opacity", props.opacity)
+                .attr("stroke-dashoffset", 0.2 * length)
+
+                .transition()
+                .duration(0.6 * emphDuration)
+                .ease(d3.easeLinear)
+                .attr("stroke-dashoffset", 0.8 * length)
+
+                .transition()
+                .duration(0.2 * emphDuration)
+                .ease(d3.easeLinear)
+                .attr("opacity", 0)
+                .attr("stroke-dashoffset", 1.0 * length);
+            paths.push(emphPath);
+        }
+        await sleep(emphDuration);
+        for (const path of paths)
+            path.remove();
+    }
+
+    addTimelineEvent(0, ["Game start"], 20, 20, 60);
+
+    for (let i = 0; i < 3; i++) {
+        fadeIn(timelineGroup.append("circle")
+            .attr("cx", 170 + 20 * i).attr("cy", 0)
+            .attr("r", 5).attr("fill", "black")
+        );
+        await sleep(250);
+    }
+    fadeIn(makeExtendoArrow(230, 0, 1240, 0, timelineGroup)[0]);
+    await addTimelineEvent(190 + 60, ["First 29 min of run"], -60, 80 + 60, 80 - 60);
+
+    await nextSlide("Add the now cursor.");
+    const nowIndicator = timelineGroup.append("path")
+        .attr("d", "M 0 2 L 15 30 L -15 30 Z")
+        .attr("fill", "red").attr("stroke-width", 2).attr("stroke", "black")
+        .attr("transform", d3Transform().translate([0, 0]));
+    nowIndicator.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+
+    function setTimeIndicator(x) {
+        nowIndicator.transition()
+            .duration(1000)
+            .attr("transform", d3Transform().translate([x, 0]));
+        return sleep(1000);
+    }
+    getTimelineIndicatorX = () => getTranslation(nowIndicator.attr("transform"))[0];
+    function advanceTimeIndicator(dt, rateFactor) {
+        rateFactor = rateFactor === undefined ? 1 : rateFactor;
+        const slideRate = 0.0095 * rateFactor;
+        const nowX = getTimelineIndicatorX();
+        nowIndicator.transition()
+            .duration(dt)
+            .ease(d3.easeLinear)
+            .attr("transform", d3Transform().translate([nowX + dt * slideRate, 0]));
+        return sleep(dt);
+    }
+
+    // Skip the time indicator over the ellipsis.
+    await nextSlide("Move the time indicator up to to the 29m mark.");
+    await setTimeIndicator(150);
+    await setTimeIndicator(230 + 20);
+
+    // Advance the video until Linkus is at the door.
+    await nextSlide("Advance time until Linkus enters SK.");
+    playGameVideo();
+    await advanceTimeIndicator(8700);
+    pauseGameVideo();
+
+    // Label the door opening on the timeline.
+    await nextSlide("Label the first board being generated on the timeline.");
+    addTimelineEvent(getTimelineIndicatorX(), ["Enter SK room", "First board generated"], 70, 20, 160);
+
+    // Advance the video until Linkus is right before finishing the first board.
+    await nextSlide("Advance until Linkus is done playing the first board.");
+    fastForwardGameVideo();
+    await advanceTimeIndicator(10100, 3);
+    pauseGameVideo();
+
+    // Label the first board being completed on the timeline.
+    await nextSlide("Label the first board being completed on the timeline.");
+    addTimelineEvent(getTimelineIndicatorX(), ["Finish first board", "Second board generated"], 20, 80, 120);
+
+    // Advance the video until Linkus is playing the second board.
+    await nextSlide("Advance the video until Linkus is playing the second board.");
+    playGameVideo();
+    await advanceTimeIndicator(5600);
+    pauseGameVideo();
+
+    // Move the video to the top right corner.
+    await nextSlide("Make Linkus small.");
+    toggleViewBoxSizing();
+
+    // Make the axis arrows pop in.
+    await nextSlide("Make the axis arrows pop in.");
+    const axisGroup = root.append("g");
+    //axisGroup.attr("transform", d3Transform().scale(1.5).translate([135, 600]));
+    axisGroup.attr("transform", d3Transform().scale(1.4).translate([100, 570]));
+    fadeIn(makeExtendoArrow(-30, 0, 1000, 0, axisGroup)[0]);
+    fadeIn(makeExtendoArrow(0, 30, 0, -500, axisGroup)[0]);
+
+    // Make the axis labels appear.
+    await sleep(1000);
+    const textGroup = axisGroup.append("g");
+    const numRNGStepsText = textGroup.append("text")
+        .text("Number of RNG steps")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "30px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([50 - 100, 60])
+        );
+    textGroup.append("text").text("0%")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "25px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([-45, -15])
+        );
+    textGroup.append("text").text("Probability")
+        .attr("x", 0).attr("y", 0)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "40px")
+        .attr("font-style", "italic")
+        .attr("transform", d3Transform()
+            .translate([-40, -60])
+            .rotate(-90)
+        );
+    textGroup.selectAll("text").transition()
+        .duration(500)
+        .attr("fill-opacity", 1);
+
+    // Make the zero level pop in.
+    const zeroLevel = axisGroup.append("line")
+        .attr("x1", 0).attr("y1", -20).attr("x2", 0).attr("y2", -20)
+        .attr("stroke-width", 1).attr("stroke", "black").attr("stroke-linecap", "round")
+        .attr("stroke-dasharray", 10);
+    zeroLevel
+        .transition()
+        .duration(1000)
+        .attr("x2", 980)
+        .attr("opacity", 1)
+        .attr("stroke-width", 3);
+
+    // Make little tick marks appear.
+    await sleep(1000);
+    const ticksGroup = axisGroup.append("g");
+    for (let i = 0; i < 98; i++) {
+        await sleep(10);
+
+        const x = 10 + 10 * i
+
+        const tick = ticksGroup.append("line")
+            .attr("x1", x).attr("y1", 0).attr("x2", x).attr("y2", 0)
+            .attr("stroke-width", 0).attr("stroke", "black").attr("stroke-linecap", "round")
+            .attr("fill", "none");
+        if (i % 5 == 0) {
+            tick.transition()
+                .duration(500)
+                .attr("stroke-width", 3)
+                .attr("y2", 20);
+        } else {
+            tick.transition()
+                .duration(500)
+                .attr("stroke-width", 2)
+                .attr("y2", 15);
+        }
+    }
+
+    // Draw the mean RNG step count estimate dashed line.
+    await nextSlide("Show the 5.5M mean.");
+    const meanX = 20 + 25 * 19;
+    const meanSpot = axisGroup.append("line")
+        .attr("x1", meanX).attr("y1", -400).attr("x2", meanX).attr("y2", -400)
+        .attr("stroke-width", 1).attr("stroke", "black").attr("stroke-linecap", "round")
+        .attr("stroke-dasharray", 10);
+    meanSpot
+        .transition()
+        .duration(1000)
+        .attr("y2", 0)
+        .attr("opacity", 1)
+        .attr("stroke-width", 3);
+    axisGroup.append("text").text("5.5 million steps")
+        .attr("x", meanX).attr("y", -420)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "35px")
+        .attr("font-style", "italic")
+        .attr("text-anchor", "middle")
+        .transition()
+        .duration(500)
+        .attr("fill-opacity", 1);
+
+    // Emphasize the region on the timeline up to the first game.
+    await nextSlide("Emphasize (game start) <-> (enter sk room) region.");
+    await emphasizeTimelineRegion("Game start", "Enter SK room");
+
+    // Draw a bell curve.
+    await nextSlide("Draw a bell curve");
+    const bellCurveGroup = axisGroup.append("g"); // I want this just to animate opacity separately.
+    let pathData = [];
+    for (let i = 0; i < 500; i++) {
+        const x = (250 - i) / 80;
+        pathData.push(300 * Math.exp(-x*x));
+    }
+    const pathFunction = d3.line()
+        .x(function(d, i) { return 1.9 * i; })
+        .y(function(d, i) { return -d; })
+        .curve(d3.curveBasis);
+    const bellCurvePath = bellCurveGroup.append("path");
+    bellCurvePath.attr("d", pathFunction(pathData))
+        .attr("stroke-width", 4).attr("stroke", "#22f").attr("stroke-linecap", "round").attr("stroke-opacity", 0.6)
+        .attr("fill", "blue");
+    const length = bellCurvePath.node().getTotalLength();
+    bellCurvePath.attr("stroke-dasharray", length).attr("stroke-dashoffset", length);
+    bellCurvePath.attr("transform", d3Transform()
+        .translate([20, -20])
+    );
+    bellCurveGroup
+        .transition()
+        .duration(1000)
+        .attr("opacity", 1);
+    bellCurvePath
+        .transition()
+        .duration(2000)
+        .attr("stroke-dashoffset", 0)
+        .attr("fill-opacity", 0.2);
+
+    // Show the squid layout that the player has seen in-game, and we narrow down based on.
+    await nextSlide("Show the first board.");
+    const firstBoardGroup = axisGroup.append("g");
+    const firstBoard = await makeBoard(240, -330, 0.6, firstBoardGroup, 0.6, true, [
+        {x: 5, y: 5, horizontal: true},
+        {x: 4, y: 1, horizontal: true},
+        {x: 2, y: 1, horizontal: false},
+    ]);
+    firstBoardGroup.append("text").text("First board:")
+        .attr("x", 90).attr("y", -500)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "40px")
+        .attr("font-style", "italic")
+        .transition()
+            .duration(1000)
+            .attr("opacity", 1);
+
+    // Show the spots where we saw this board.
+    await nextSlide("Show the RNG spots matching the first board.");
+    // Simultaneously, make the 5.5M mean spot dashed line a little opaque.
+    meanSpot.transition()
+        .duration(1000)
+        .attr("opacity", 0.2);
+    function drawExtendoPath(x1, y1, x2, y2) {
+        const indicatorPath = axisGroup.append("path");
+        const pathFunction = d3.line()
+            .x(d => d[0]).y(d => d[1])
+            .curve(d3.curveBasis);
+        const pathData = [[x1, y1], [x1, (y1 + y2) / 2], [x2, (y1 + y2) / 2], [x2, y2]];
+        indicatorPath.attr("d", pathFunction(pathData))
+            .attr("stroke-width", 4).attr("stroke", "black").attr("stroke-linecap", "round")
+            .attr("fill", "none").attr("marker-end", "url(#arrowHead)");
+        const length = indicatorPath.node().getTotalLength();
+        indicatorPath.attr("stroke-dasharray", length).attr("stroke-dashoffset", length);
+        indicatorPath.transition()
+            .duration(1000)
+            .attr("stroke-dashoffset", 0)
+            .attr("opacity", 1);
+        return indicatorPath;
+    }
+    const disregard1 = drawExtendoPath(176, -295, 127, -54);
+    await sleep(200);
+    const regard1 = drawExtendoPath(176, -295, 350, -54);
+    await sleep(200);
+    const regard2 = drawExtendoPath(176, -295, 550, -54);
+    await sleep(200);
+    const disregard2 = drawExtendoPath(176, -295, 821, -54);
+
+    // Disregard the far away matches.
+    await nextSlide("Disregard the far matches.");
+    const rejectX1 = drawX(axisGroup, 127, -40, 25, "red");
+    disregard1.transition()
+        .duration(1000)
+        .attr("opacity", 0.1);
+    await sleep(500);
+    const rejectX2 = drawX(axisGroup, 821, -40, 25, "red");
+    disregard2.transition()
+        .duration(1000)
+        .attr("opacity", 0.1);
+
+    // Get the probabilities of our matches.
+    // 31.6% for the low one - 68.4% for the high one
+    await nextSlide("Add probability flags.");
+    async function getProbLine(parent, x, height, xOff, bottomLabel, label, textDeltaSize) {
+        textDeltaSize = textDeltaSize === undefined ? 50 : textDeltaSize;
+        const l = parent.append("line")
+            .attr("x1", x).attr("y1", -22).attr("x2", x).attr("y2", -22)
+            .attr("stroke-width", 1).attr("stroke", "#00d").attr("stroke-linecap", "round")
+            .attr("stroke-dasharray", 13.5);
+        l.transition()
+            .duration(2000)
+            .attr("y2", -height)
+            .attr("opacity", 1)
+            .attr("stroke-width", 6);
+        const bottomText = parent.append("text").text(bottomLabel)
+            .attr("x", x).attr("y", 55)
+            .attr("font-family", "EB Garamond")
+            .attr("font-size", "35px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle")
+            .transition()
+            .duration(500)
+            .attr("fill-opacity", 1);
+        await sleep(2000);
+        const flag = parent.append("line")
+            .attr("x1", x).attr("y1", -height).attr("x2", x).attr("y2", -height)
+            .attr("stroke-width", 1).attr("stroke", "#00d").attr("stroke-linecap", "round");
+        flag.transition()
+            .duration(600)
+            .attr("x2", x + xOff)
+            .attr("opacity", 1)
+            .attr("stroke-width", 6);
+        await sleep(1000);
+        const delta = xOff > 0 ? textDeltaSize : -textDeltaSize;
+        const flagText = parent.append("text").text(label)
+            .attr("x", x + xOff + delta).attr("y", -height + 10)
+            .attr("font-family", "EB Garamond")
+            .attr("font-size", "35px")
+            .attr("font-style", "italic")
+            .attr("text-anchor", "middle")
+            .transition()
+            .duration(500)
+            .attr("fill-opacity", 1);
+    }
+    for (const r of [regard1, regard2])
+        r.transition()
+            .duration(1000)
+            .attr("opacity", 0.3);
+    for (const r of [rejectX1, rejectX2])
+        r.attr("opacity", 1)
+            .transition()
+                .duration(1000)
+                .attr("opacity", 0.1);
+    await sleep(500);
+    const originalProbFlags = axisGroup.append("g");
+    getProbLine(originalProbFlags, 350, 140, -70, "5,389,276", "31.6%"); // ~145 before middle
+    getProbLine(originalProbFlags, 550, 280, -150, "5,542,940", "68.4%"); // ~55 after middle
+    // Clean up all the old nonsense.
+    await sleep(1000);
+    for (const o of [disregard1, rejectX1, regard1, regard2, disregard2, rejectX2])
+        o.transition()
+            .duration(1000)
+            .attr("opacity", 0);
+
+    // Show the viewer the period of time we care about for estimating the spike offset.
+    await nextSlide("Highlight the region between the first and second boards generating.");
+    await emphasizeTimelineRegion("First board generated", "Second board generated");
+
+    // Update the curve to reflect our new posterior.
+    await nextSlide("Update the curve to be two spikes for the second board.");
+    function setNewKnowledgeValues(gaussians) {
+        const pathData = [];
+        for (let i = 0; i < 500; i++) {
+            // No, I don't particularly strive for proper normalization here.
+            // I'm going more for something aesthetically pleasing. :)
+            let accum = 0;
+            for (const gaussian of gaussians) {
+                let x = (gaussian.mean - i) / gaussian.width;
+                accum += gaussian.height * Math.exp(-x*x);
+            }
+            pathData.push(accum);
+        }
+        bellCurvePath.attr("stroke-dasharray", "");
+        bellCurvePath.transition()
+            .duration(1000)
+            .attr("d", pathFunction(pathData));
+    }
+    setNewKnowledgeValues([
+        {mean: 190, width: 3, height: 0.316 * 500},
+        {mean: 296, width: 3, height: 0.684 * 500},
+    ]);
+
+    // Show the dependence on how long we took.
+    await nextSlide("Shift the curve ->");
+    bellCurvePath.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([40, -20]));
+    await nextSlide("Shift the curve <-");
+    bellCurvePath.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().translate([20, -20]));
+
+    // Make the video large.
+    await nextSlide("Make the video large.");
+    axisGroup.attr("opacity", 1);
+    axisGroup.transition()
+        .duration(1000)
+        .attr("opacity", 0.2);
+    toggleViewBoxSizing();
+
+    // Advance the video until Linkus is about to beat the second game.
+    await nextSlide("Fast forward through the second game.");
+    fastForwardGameVideo();
+    await advanceTimeIndicator(29500 / 3, 3);
+    pauseGameVideo();
+
+    // Make the video small again.
+    await nextSlide("Make the video small.");
+    toggleViewBoxSizing();
+    await sleep(1000);
+    axisGroup.transition()
+        .duration(1000)
+        .attr("opacity", 1);
+
+    // Label the door opening on the timeline.
+    await nextSlide("Mark the timeline with the second board.");
+    addTimelineEvent(getTimelineIndicatorX(), ["Finish second board", "Third board generated"], 0, 100, 100);
+
+    // Show the second board, which we now infer.
+    await nextSlide("Hide the first board, and show the second board.");
+    firstBoardGroup.attr("opacity", 1);
+    firstBoardGroup.transition()
+        .duration(1000)
+        .attr("opacity", 0)
+        .attr("transform", d3Transform().translate([-400, 0]));
+    /*
+    firstBoard.root.transition()
+        .duration(1000)
+        .attr("transform", d3Transform().scale(0));
+    */
+    await sleep(1000);
+    firstBoardGroup.remove();
+    const secondBoardGroup = axisGroup.append("g");
+    const secondBoard = await makeBoard(240, -330, 0.6, secondBoardGroup, 0.6, true, [
+        {x: 0, y: 3, horizontal: false},
+        {x: 4, y: 5, horizontal: false},
+        {x: 5, y: 2, horizontal: false},
+    ]);
+    secondBoardGroup.append("text").text("Second board:")
+        .attr("x", 75).attr("y", -500)
+        .attr("font-family", "EB Garamond")
+        .attr("font-size", "40px")
+        .attr("font-style", "italic")
+        .transition()
+            .duration(1000)
+            .attr("opacity", 1);
+
+    // Show arrows animating out of second board.
+    await nextSlide("Show possible RNG step counts for the third board");
+    const secondDisregard1 = drawExtendoPath(176, -295, 100, -54);
+    await sleep(200);
+    const secondRegard1    = drawExtendoPath(176, -295, 580, -54);
+    await sleep(200);
+    const secondDisregard2 = drawExtendoPath(176, -295, 890, -54);
+
+    // Disregard the far away matches.
+    await nextSlide("Disregard far away matches.");
+    const secondRejectX1 = drawX(axisGroup, 100, -40, 25, "red");
+    secondDisregard1.transition()
+        .duration(1000)
+        .attr("opacity", 0.1);
+    await sleep(250);
+    const secondRejectX2 = drawX(axisGroup, 890, -40, 25, "red");
+    secondDisregard2.transition()
+        .duration(1000)
+        .attr("opacity", 0.1);
+    await sleep(1000);
+    secondRejectX1.attr("opacity", 1);
+    secondRejectX2.attr("opacity", 1);
+    for (const o of [secondDisregard1, secondRejectX1, secondDisregard2, secondRejectX2])
+        o.transition()
+            .duration(1000)
+            .attr("opacity", 0);
+
+    // Create the new probability flags.
+    await nextSlide("Create the new probability flags.");
+    originalProbFlags.attr("opacity", 1);
+    originalProbFlags.transition()
+        .duration(1000)
+        .attr("opacity", 0);
+    await sleep(1000);
+    const secondProbFlags = axisGroup.append("g");
+    getProbLine(secondProbFlags, 550, 150, -200, "5,542,940 and 5,551,701", "First board gen", 110);
+    getProbLine(secondProbFlags, 580, 220, -120, "", "Second board gen", 120);
+    await sleep(500);
+    secondRegard1.attr("opacity", 1);
+    secondRegard1.transition()
+        .duration(1000)
+        .attr("opacity", 0);
+
+    // Show the final interval we're estimating based off of.
+    await nextSlide("Emphasize the 2 <-> 3 time.");
+    await emphasizeTimelineRegion("Second board generated", "Third board generated");
+
+    // Show our third board probability distribution.
+    await nextSlide("Update the curve to be a spike for the third board.");
+    setNewKnowledgeValues([
+        {mean: 296 + 13, width: 3, height: 1.000 * 380.42069},
+    ]);
+
+    // Make the thing big.
+    await nextSlide("Make the video big.");
+    axisGroup.transition()
+        .duration(1000)
+        .attr("opacity", 0.2);
+    toggleViewBoxSizing();
+
+    // Let the game keep playing.
+    await nextSlide("Continue the video.");
+    fastForwardGameVideo();
+    // Cheat a little bit here... this speed should be 3.0, but we compress it for aesthetics.
+    await advanceTimeIndicator(43000 / 3, 1.91);
+    pauseGameVideo();
+    addTimelineEvent(getTimelineIndicatorX(), ["We win!"], -20, 50, 10);
+
+    await nextSlide("Done!");
+    // Fade out the video.
+    startVideoFadeout = true;
+}
+
+async function doSlide(slideFn) {
+    const slideRoot = svg.append("g");
+    slideRoot.attr("opacity", 1);
+    await slideFn(slideRoot);
+    await sleep(250);
+    slideRoot.transition()
+        .duration(1500)
+        .attr("opacity", 0);
+    await sleep(1500);
+    slideRoot.remove();
+}
+
+async function main() {
+    //debugPoint();
+    //globalTimeScale = 0.6;
+    await nextSlide("Begin the presentation.");
+    await doSlide(showBoardAveraging);
+    await doSlide(showRNGSequence);
+    await doSlide(showBoardSampling);
+    await doSlide(showFirstBoardProgression);
+    await doSlide(showPDFs);
+}
+
+//await doSlide(showBoardSequence);
+
+var globalNextSlideContinuation = null;
+var fastSlideFlag = false;
+
+var firstAdvanceTime = null;
+var savedAdvanceTimings = [];
+//var replaceAdvanceTimings = [0,2659,4646,6615,7905,10670,13045,17137,35058,37875,39988,42603,55366,63348,70612,72018,77112,78779,84400];
+var replaceAdvanceTimings = null;
+const REPLAY_TIME_FACTOR = 1; //3;
+
+debugPoint();
+globalTimeScale = REPLAY_TIME_FACTOR;
+
+function nextSlide(notes) {
+    notes = notes === undefined ? "" : notes;
+    if (skipThrough)
+        return sleep(1500);
+    if (fastSlideFlag) {
+        globalTimeScale *= 10;
+        fastSlideFlag = false;
+    }
+    return new Promise(resolve => {
+        // Check if we have timing data.
+        if (replaceAdvanceTimings !== null && firstAdvanceTime !== null && replaceAdvanceTimings.length > 0) {
+            const timing = replaceAdvanceTimings[0] * REPLAY_TIME_FACTOR;
+            const delay = timing - (performance.now() - firstAdvanceTime);
+            console.log("Target:", timing, "Waiting:", delay);
+            setTimeout(resolveSlideContinuation, delay);
+        }
+        globalNextSlideContinuation = resolve;
+        document.getElementById("messageBox").innerText = "Press space to advance, n to zoom to next pause...\n" + notes;
+    });
+    return promise;
+}
+
+function debugPoint(timeScale) {
+    skipThrough = false;
+    globalTimeScale = timeScale === undefined ? 1.0: timeScale;
+    //return nextSlide();
+}
+
+const keysHeld = new Set();
+
+function pauseGameVideo() {
+    videoElem.pause();
+    document.getElementById("pausaIndicator").innerText = "⏸";
+    document.getElementById("pausaIndicatorFloat").className = "";
+}
+
+function playGameVideo() {
+    videoElem.playbackRate = 1.0 / REPLAY_TIME_FACTOR;
+    videoElem.play();
+    document.getElementById("pausaIndicator").innerText = "⏵";
+    document.getElementById("pausaIndicatorFloat").className = "waveSlow";
+}
+
+function fastForwardGameVideo() {
+    videoElem.playbackRate = 3.0 / REPLAY_TIME_FACTOR;
+    videoElem.play();
+    document.getElementById("pausaIndicator").innerText = "⏩️";
+    document.getElementById("pausaIndicatorFloat").className = "waveFast";
+}
+
+function resolveSlideContinuation() {
+    if (globalNextSlideContinuation !== null) {
+        if (firstAdvanceTime === null)
+            firstAdvanceTime = performance.now();
+        savedAdvanceTimings.push(performance.now() - firstAdvanceTime);
+        document.getElementById("timingsBox").innerText = "[" + savedAdvanceTimings.map((i) => i.toFixed(0)) + "]";
+        if (replaceAdvanceTimings !== null) {
+            replaceAdvanceTimings.shift();
+        }
+
+        document.getElementById("messageBox").innerText = "";
+        const resolve = globalNextSlideContinuation;
+        async function asynchronouslyResolve() {
+            resolve();
+        }
+        // I do this so that the key handler can return immediately.
+        asynchronouslyResolve();
+    }
+}
+
+function globalShortcutsHandler(evt) {
+    keysHeld.add(evt.key);
+    if (evt.key === " ") {
+        resolveSlideContinuation();
+        evt.preventDefault();
+    }
+    if (evt.key === "n") {
+        globalTimeScale /= 10;
+        fastSlideFlag = true;
+        resolveSlideContinuation();
+    }
+    if (evt.key === "z" || evt.key === "y")
+        pauseGameVideo();
+    if (evt.key === "x")
+        playGameVideo();
+    if (evt.key === "c")
+        fastForwardGameVideo();
+    if (evt.key === "v")
+        toggleViewBoxSizing();
+}
+
+document.addEventListener("keydown", globalShortcutsHandler);
+document.addEventListener("keyup", function(evt) {
+    keysHeld.delete(evt.key);
+});
+
+main();
+
+/*
+    // Emphasize the curve.
+    await nextSlide();
+    const emphBellCurvePath = bellCurveGroup.append("path");
+    emphBellCurvePath.attr("d", pathFunction(pathData))
+        .attr("stroke-width", 5).attr("stroke", "#22f").attr("stroke-linecap", "round")
+        .attr("fill", "none");
+    emphBellCurvePath.attr("stroke-dasharray", 0.05 * length).attr("stroke-dashoffset", 0);
+    emphBellCurvePath.attr("transform", d3Transform()
+        .translate([20, -20])
+    );
+    const emphDuration = 4000;
+    bellCurvePath.attr("opacity", 1);
+    bellCurvePath
+        .transition()
+        .duration(0.2 * emphDuration)
+        .ease(d3.easeLinear)
+        .attr("opacity", 0.9)
+
+        .transition()
+        .duration(0.6 * emphDuration)
+
+        .transition()
+        .duration(0.2 * emphDuration)
+        .ease(d3.easeLinear)
+        .attr("opacity", 1);
+    emphBellCurvePath
+        .transition()
+        .duration(0.2 * emphDuration)
+        .ease(d3.easeLinear)
+        .attr("opacity", 1)
+        .attr("stroke-dashoffset", 0.2 * length)
+
+        .transition()
+        .duration(0.6 * emphDuration)
+        .ease(d3.easeLinear)
+        .attr("stroke-dashoffset", 0.8 * length)
+
+        .transition()
+        .duration(0.2 * emphDuration)
+        .ease(d3.easeLinear)
+        .attr("opacity", 0)
+        .attr("stroke-dashoffset", 1.0 * length);
+    await sleep(emphDuration);
+*/
+
+        </script>
+    </body>
+</html>
