@@ -1312,32 +1312,33 @@ function globalShortcutsHandler(evt) {
         return;
 
     // Add z or y for German keyboard support.
-    if (evt.key === 'z' && evt.ctrlKey)
+    var event_key = evt.key.toLowerCase();
+    if (event_key === 'z' && evt.ctrlKey)
         globalMap.undoLastMarking();
-    else if ((evt.key === 'z' || evt.key === 'y')  && globalMap !== null)
+    else if ((event_key === 'z' || event_key === 'y')  && globalMap !== null)
         globalMap.reportMiss();
-    if (evt.key === 'x' && globalMap !== null)
+    if ((event_key.lower === 'x') && globalMap !== null)
         globalMap.reportHit();
-    if (evt.key === 'c' && globalMap !== null)
+    if (event_key === 'c' && globalMap !== null)
         globalMap.incrementKills();
-    if (evt.key === 's' && globalMap !== null)
+    if (event_key === 's' && globalMap !== null)
         globalMap.splitTimer();
-    if (evt.key === 'h' && globalMap !== null)
+    if (event_key === 'h' && globalMap !== null)
         globalMap.copyToHistory();
 
-    if (evt.key === ' ' && globalBoardTimer !== null) {
+    if (event_key === ' ' && globalBoardTimer !== null) {
         globalBoardTimer.toggleRunning();
         evt.preventDefault();
     }
-    if (evt.key === ',' && globalBoardTimer !== null)
+    if (event_key === ',' && globalBoardTimer !== null)
         globalBoardTimer.adjustRewards(+1);
-    if (evt.key === '<' && globalBoardTimer !== null)
+    if (event_key === '<' && globalBoardTimer !== null)
         globalBoardTimer.adjustRewards(-1);
-    if (evt.key === 'm' && globalBoardTimer !== null)
+    if (event_key === 'm' && globalBoardTimer !== null)
         globalBoardTimer.toggleLoadingTheRoom();
-    if (evt.key === ';' && globalBoardTimer !== null)
+    if (event_key === ';' && globalBoardTimer !== null)
         globalBoardTimer.toggleInvalidated();
-    if (evt.key === ':' && globalBoardTimer !== null)
+    if (event_key === ':' && globalBoardTimer !== null)
         globalBoardTimer.resetTimer();
 }
 
