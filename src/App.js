@@ -598,7 +598,7 @@ class BoardTimer extends React.Component {
 
     guessStepsElapsedFromTime(timeDeltaSeconds) {
         // I did some linear regressions from real HD Italian runs. I'll put some data up at some point.
-        let prediction = 156 + 252 * timeDeltaSeconds;
+        let prediction = Number(this.props.timedTickIntercept) + Number(this.props.timedTickRate) * timeDeltaSeconds;
         if (this.state.includesLoadingTheRoom)
             prediction += -940 + Number(this.props.roomEnteredOffset);
         prediction += this.state.includedRewardsGotten * 760;
@@ -636,6 +636,8 @@ const defaultConfigurationParams = {
     nextBoardStepsThousands: 7,
     nextBoardStepsThousandsStdDev: 3,
     timedBoardStepsThousandsStdDev: 0.2,
+    timedTickIntercept: 156,
+    timedTickRate: 252,
     roomEnteredOffset: 0,
 };
 
@@ -697,8 +699,20 @@ class MainMap extends React.Component {
             potentialMatches: [],
         };
         // Load relevant configuration from localStorage.
-        const savedSettings = localStorage.getItem('SKSettings');
-        const configParams = savedSettings === null ? defaultConfigurationParams : JSON.parse(savedSettings);
+        let savedSettings = localStorage.getItem('SKSettings');
+        if (savedSettings === null) {
+            savedSettings = defaultConfigurationParams;
+        } else {
+            // if saved configuration from previous version, use defaults for 
+            // any new parameters
+            savedSettings = JSON.parse(savedSettings);
+            for (const name of Object.keys(defaultConfigurationParams)) {
+                if (!(name in savedSettings)){
+                    savedSettings[name] = defaultConfigurationParams[name];
+                }
+            }
+        }
+        const configParams = savedSettings;
         return {...state, ...configParams};
     }
 
@@ -1157,7 +1171,7 @@ class MainMap extends React.Component {
                         <span>&nbsp;Shots used:&nbsp;</span>
                         <span>&nbsp;{usedShots}&nbsp;</span>
                         {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
-                            <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} />
+                            <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} timedTickIntercept={this.state.timedTickIntercept} timedTickRate={this.state.timedTickRate}/>
                             <span>&nbsp;Last steps:&nbsp;</span>
                             <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
                         </>}
@@ -1266,14 +1280,18 @@ class MainMap extends React.Component {
                     )}
                 </div>
                 <hr/>
-                <div style={{color: 'white', fontSize: '130%'}}>
-                    Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):<br/>
-                    First board mean:    <input style={{width: '60px', fontSize: '120%'}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/> &nbsp;
-                    First board stddev:  <input style={{width: '60px', fontSize: '120%'}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Next board mean:     <input style={{width: '60px', fontSize: '120%'}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/> &nbsp;
-                    Next board stddev:   <input style={{width: '60px', fontSize: '120%'}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/> &nbsp;
-                    Timed board stddev:  <input style={{width: '60px', fontSize: '120%'}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>&nbsp;
-                    Room entered offset: <input style={{width: '60px', fontSize: '120%'}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
+                <div style={{display:"grid", gridTemplateColumns: "1fr auto 1fr"}}>
+                    <div style={{display:"grid", gridTemplateRows: "1fr 1fr 1fr", gridTemplateColumns: "repeat(8, 1fr)", justifyItems: "center", alignItems: "true", gridColumn: "2"}}>
+                        <div style={{gridRow: "1", gridColumn: "1 / span 8"}}>Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):</div>
+                        <div style={{gridRow: "2", gridColumn: "1"}}>First board mean:     </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "2"}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/>
+                        <div style={{gridRow: "2", gridColumn: "3"}}>First board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "4"}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> 
+                        <div style={{gridRow: "2", gridColumn: "5"}}>Next board mean:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "6"}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/>
+                        <div style={{gridRow: "2", gridColumn: "7"}}>Next board stddev:    </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "8"}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
+                        <div style={{gridRow: "3", gridColumn: "1"}}>Timed board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "2"}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
+                        <div style={{gridRow: "3", gridColumn: "3"}}>Timed Tick Intercept: </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "4"}} value={this.state.timedTickIntercept}             onChange={event => this.setState({timedTickIntercept: event.target.value})}/>
+                        <div style={{gridRow: "3", gridColumn: "5"}}>Timed Tick Rate:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "6"}} value={this.state.timedTickRate}                  onChange={event => this.setState({timedTickRate: event.target.value})}/>
+                        <div style={{gridRow: "3", gridColumn: "7"}}>Room entered offset:  </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "8"}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
+                    </div>
                 </div>
 
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.saveConfigParams(); }}>Save Settings</button> &nbsp;
