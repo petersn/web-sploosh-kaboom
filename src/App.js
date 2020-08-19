@@ -778,6 +778,10 @@ class MainMap extends React.Component {
         for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
             matches.push(match);
         sendSpywareEvent({kind: 'recomputePotentialMatches', matches});
+        if (matches[0].length == 0) {
+            matches.length = 0;
+            matches.push([null, null]);
+        }
         this.setState({potentialMatches: matches});
     }
 
@@ -1300,10 +1304,15 @@ class MainMap extends React.Component {
 
                 <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '2px solid white', borderRadius: '8px', width: '400px', minHeight: '20px', display: 'inline-block'}}>
                     {this.state.potentialMatches.map((match, i) => {
-                        const diffs = match.slice(1);
-                        return <div key={i}>
-                            Potential match: {match[0]}{diffs.map((x, i) => <> +{x - match[i]}</>)}
-                        </div>;
+                        if (match[0] === null) {
+                            return <div key={0}>No Matches Found!</div>
+                        }
+                        else {
+                            const diffs = match.slice(1);
+                            return <div key={i}>
+                                Potential match: {match[0]}{diffs.map((x, i) => <> +{x - match[i]}</>)}
+                            </div>;
+                        }
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
