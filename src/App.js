@@ -768,7 +768,7 @@ class MainMap extends React.Component {
         const indexMax = Math.min(boardTable.length, startIndex + scanRange);
         for (let i = startIndex; i < indexMax; i++)
             if (boardTable[i] === soughtBoard)
-                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 15000))
+                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 50000))
                     yield [i, ...subResult];
     }
 
@@ -1381,7 +1381,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen and CryZe ({VERSION_STRING})</span><br/>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe and csunday95 ({VERSION_STRING})</span><br/>
             <span style={{ color: 'white' }}></span>
         </div>;
     }
