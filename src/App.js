@@ -768,7 +768,7 @@ class MainMap extends React.Component {
         const indexMax = Math.min(boardTable.length, startIndex + scanRange);
         for (let i = startIndex; i < indexMax; i++)
             if (boardTable[i] === soughtBoard)
-                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 50000))
+                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 100000))
                     yield [i, ...subResult];
     }
 
