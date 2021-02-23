@@ -9,7 +9,7 @@ import init, {
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
 
-const VERSION_STRING = 'v0.0.19';
+const VERSION_STRING = 'v0.0.20';
 
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
@@ -234,6 +234,9 @@ const SPYWARE_HOST = 'http://ec2-34-223-48-61.us-west-2.compute.amazonaws.com:12
 var globalSpyware = null;
 var globalSpywareCounter = -1;
 
+// To anyone reading this:
+// I chose the name "spyware" to be silly — this is a completely optional opt-in feature to send usage data for analysis.
+// You have to actually explicitly enable the spyware with a checkbox in the GUI, and there's an explanation.
 async function sendSpywareEvent(eventData) {
     if (globalSpyware === null || globalMap === null)
         return;
@@ -1344,7 +1347,7 @@ function globalShortcutsHandler(evt) {
         globalMap.undoLastMarking();
     else if ((event_key === 'z' || event_key === 'y')  && globalMap !== null)
         globalMap.reportMiss();
-    if ((event_key.lower === 'x') && globalMap !== null)
+    if ((event_key === 'x') && globalMap !== null)
         globalMap.reportHit();
     if (event_key === 'c' && globalMap !== null)
         globalMap.incrementKills();
@@ -1390,7 +1393,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe and csunday95 ({VERSION_STRING})</span><br/>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span><br/>
             <span style={{ color: 'white' }}></span>
         </div>;
     }
