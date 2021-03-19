@@ -147,8 +147,8 @@ impl PossibleBoards {
         let mut probabilities = [0.0; 64];
 
         for (i, pb) in (&self.boards).iter().enumerate() {
-            let board_prob = (1e-20 + board_priors[i]) * pb.probability;
             if pb.check_compatible(hit_mask, miss_mask, squids_gotten) {
+                let board_prob = 1e-20 * pb.probability + board_priors[i];
                 for (bit_index, probability) in probabilities.iter_mut().enumerate() {
                     if (pb.squids & (1 << bit_index)) != 0 {
                         *probability += board_prob;
@@ -302,10 +302,7 @@ pub fn calculate_probabilities_with_board_constraints(
     board_constraints: &[u32],
     constraint_probs: &[f64],
 ) -> Option<Vec<f64>> {
-    let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-    for _ in 0..604584 {
-        board_priors.push(if board_constraints.is_empty() { 1.0 } else { 0.0 });
-    }
+    let mut board_priors = vec![0.0; 604584];
     for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
         board_priors[*board_index as usize] = *prior_prob;
     }
@@ -316,8 +313,10 @@ pub fn calculate_probabilities_with_board_constraints(
 
     let mut values = probabilities.iter().copied().collect::<Vec<_>>();
 
-    // We sneak in the total probability at the end.
-    values.push(total_probability);
+    // We sneak in the total probability at the end. With the way this value
+    // is calculated, it ranges from 0 to about 1e-20. We scale it up here, to
+    // range from 0 to about 1.
+    values.push(total_probability * 1e20);
 
     Some(values)
 }
@@ -392,7 +391,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let priors = vec![1.0; 604584];
+        let priors = vec![0.0; 604584];
         PossibleBoards::new().do_computation(&[], &[], -1, &priors).unwrap();
     }
 }
