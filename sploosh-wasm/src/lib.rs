@@ -41,45 +41,33 @@ struct SquidStartingDesc {
 }
 
 impl SquidStartingDesc {
-    fn is_valid(&self, mut taken_so_far: u64, length: u64) -> Option<u64> {
-        for offset in 0..length {
-            let mut nx = self.x;
-            let mut ny = self.y;
-            match self.direction {
-                Orientation::Horizontal => nx += offset,
-                Orientation::Vertical => ny += offset
-            }
-            if nx > 7 || ny > 7 {
-                return None;
-            }
-            let bit = 1 << (nx + 8 * ny);
-            if (taken_so_far & bit) != 0 {
-                return None;
-            }
-            taken_so_far |= bit;
+    fn board_mask(&self, taken_so_far: u64, length: u64) -> Option<u64> {
+        let (changing_value, shift) = match self.direction {
+            Orientation::Horizontal => (self.x, 1),
+            Orientation::Vertical => (self.y, 8),
+        };
+        if changing_value + length > 8 {
+            return None;
         }
-        Some(taken_so_far)
+        let first_bit = 1 << (self.x + 8 * self.y);
+        let squid_bits = (0..length).map(|x| first_bit << (x * shift))
+                                    .reduce(|a, bit| a | bit).unwrap();
+        if (taken_so_far & squid_bits) != 0 {
+            return None;
+        }
+        Some(squid_bits)
     }
 }
 
-fn count_valid_children(
+fn get_compatible_masks(
     starting_descs: &[SquidStartingDesc; 128],
     taken_so_far: u64,
     length: u64,
-) -> usize {
+) -> Vec<u64> {
     starting_descs
         .iter()
-        .filter_map(|desc| desc.is_valid(taken_so_far, length))
-        .count()
-}
-
-macro_rules! or_continue {
-    ($e:expr) => {
-        match $e {
-            Some(v) => v,
-            None => continue,
-        }
-    };
+        .filter_map(|desc| desc.board_mask(taken_so_far, length))
+        .collect()
 }
 
 fn make_mask(bits: &[u8]) -> u64 {
@@ -119,31 +107,33 @@ impl PossibleBoards {
 
         let mut possible_boards = Vec::with_capacity(604584);
 
-        // count up the valid placements
-        let mask0 = 0;
+        // Due to the board sampling method, there is a bias towards certain boards.
+        // We need to store these biases to provide accurate guesses.
+        let compatible_masks = get_compatible_masks(&starting_descs, 0u64, 2);
+        let combinations_2 = compatible_masks.len();
 
-        let children0 = count_valid_children(&starting_descs, mask0, 2);
-        for squid2_desc in starting_descs.iter() {
-            let mask1 = or_continue!(squid2_desc.is_valid(mask0, 2));
+        for mask_2 in compatible_masks {
+            let compatible_masks = get_compatible_masks(&starting_descs, mask_2, 3);
+            let combinations_23 = combinations_2 * compatible_masks.len();
 
-            let children1 = count_valid_children(&starting_descs, mask1, 3);
-            for squid3_desc in starting_descs.iter() {
-                let mask2 = or_continue!(squid3_desc.is_valid(mask1, 3));
+            for mask_3 in compatible_masks {
+                let mask_23 = mask_2 | mask_3;
+                let compatible_masks = get_compatible_masks(&starting_descs, mask_23, 4);
+                let combinations_234 = combinations_23 * compatible_masks.len();
 
-                let children2 = count_valid_children(&starting_descs, mask2, 4);
-                for squid4_desc in starting_descs.iter() {
-                    let mask3 = or_continue!(squid4_desc.is_valid(mask2, 4));
-
+                for mask_4 in compatible_masks {
                     possible_boards.push(PossibleBoard {
-                        squids: mask3,
-                        squid2: mask1,
-                        squid3: mask2 & !mask1,
-                        squid4: mask3 & !mask2,
-                        probability: 1.0 / (children0 * children1 * children2) as f64,
+                        squids: mask_23 | mask_4,
+                        squid2: mask_2,
+                        squid3: mask_3,
+                        squid4: mask_4,
+                        probability: 1.0 / combinations_234 as f64,
                     });
                 }
             }
         }
+
+        assert_eq!(possible_boards.len(), 604584);
 
         Self {
             boards: possible_boards,
