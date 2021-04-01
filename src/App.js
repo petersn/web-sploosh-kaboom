@@ -229,7 +229,7 @@ function generateRandomToken(n) {
 }
 
 // Ugh, maybe later I'll give it a proper domain, and move over to https.
-const SPYWARE_HOST = 'http://ec2-34-223-48-61.us-west-2.compute.amazonaws.com:1234';
+const SPYWARE_HOST = 'http://skphonehome.peter.website:1234';
 
 var globalSpyware = null;
 var globalSpywareCounter = -1;
