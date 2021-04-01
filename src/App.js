@@ -9,7 +9,7 @@ import init, {
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
 
-const VERSION_STRING = 'v0.0.20';
+const VERSION_STRING = 'v0.0.21';
 
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
