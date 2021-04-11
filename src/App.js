@@ -9,7 +9,7 @@ import init, {
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
 
-const VERSION_STRING = 'v0.0.21';
+const VERSION_STRING = 'v0.0.22';
 
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
@@ -791,7 +791,7 @@ class MainMap extends React.Component {
     makeGameHistoryArguments() {
         // Figure out how many history boards we have.
         const rawObservedBoards = this.layoutDrawingBoardRefs
-            .map((ref) => this.boardIndices[ref.current.getLayoutString()]);
+            .map((ref) => (ref.current ? this.boardIndices[ref.current.getLayoutString()] : undefined));
         const observedBoards = [];
         for (const ob of rawObservedBoards) {
             if (ob === undefined)
@@ -854,6 +854,7 @@ class MainMap extends React.Component {
         console.log('Doing computation:', squidsGotten, grid);
         const t0 = performance.now();
         const {hits, misses, numericSquidsGotten} = this.getGridStatistics(grid, squidsGotten);
+        const hitCount = hits.length;
 
         await wasm;
         let probabilities;
@@ -892,11 +893,14 @@ class MainMap extends React.Component {
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     probs[[x, y]] = probabilities[8 * y + x];
-                    const l1Distance = computeL1Distance(this.state.cursorBelief, [x, y]);
-                    const distancePenaltyMultiplier = 1 - 0.03 * l1Distance;
-                    const distanceAdjustedProb = probabilities[8 * y + x] * distancePenaltyMultiplier;
-                    if (grid[[x, y]] === null && distanceAdjustedProb > highestProb) {
-                        highestProb = distanceAdjustedProb;
+                    var effectiveProbability =  probabilities[8 * y + x];
+                    if (hitCount != 0){
+                        const l1Distance = computeL1Distance(this.state.cursorBelief, [x, y]);
+                        const distancePenaltyMultiplier = 1 - 0.03 * l1Distance;
+                        effectiveProbability = effectiveProbability * distancePenaltyMultiplier
+                    }
+                    if (grid[[x, y]] === null && effectiveProbability > highestProb) {
+                        highestProb = effectiveProbability;
                         maxX = x;
                         maxY = y;
                     }
@@ -916,7 +920,7 @@ class MainMap extends React.Component {
             grid, hits, misses, numericSquidsGotten,
             oldValid: this.state.valid,
             didWeConcludeTheSituationWasValid: valid,
-            probabilities: Array.from(probabilities),
+            probabilities: probabilities ? Array.from(probabilities) : [],
             turboBlurboMode: this.state.turboBlurboMode,
             turboBlurboTiming: this.state.turboBlurboTiming,
             gameHistoryArguments: (gameHistoryArguments === null) ? [] : gameHistoryArguments.map(a => Array.from(a)),
