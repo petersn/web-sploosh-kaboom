@@ -187,7 +187,7 @@ impl PossibleBoards {
         }
         fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
             let z = x / sigma;
-            return (z * z / -2.0).exp();
+            (z * z / -2.0).exp()
         }
         fn scan_from(
             depth: usize, starting_index: usize, prob: f64,
@@ -388,8 +388,8 @@ pub fn disambiguate_final_board(
 }
 
 #[wasm_bindgen]
-pub fn set_board_table(board_table: &[u32]) -> () {
-    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>());
+pub fn set_board_table(board_table: &[u32]) {
+    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>()).unwrap();
 }
 
 #[cfg(test)]
