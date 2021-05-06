@@ -247,7 +247,7 @@ async function sendSpywareEvent(eventData) {
         return;
     if (!globalMap.state.spywareMode)
         return;
-    eventData.timestamp = (new Date()). getTime() / 1000;
+    eventData.timestamp = (new Date()).getTime() / 1000;
     globalSpywareCounter++;
     //console.log('Sending spyware event:', globalSpywareCounter, eventData);
     const body = JSON.stringify({
@@ -620,8 +620,9 @@ class BoardTimer extends React.Component {
             <span>&nbsp;{renderYesNo(this.state.includesLoadingTheRoom)}&nbsp;</span>
             <span>&nbsp;Rewards gotten:&nbsp;</span>
             <span>&nbsp;{this.state.includedRewardsGotten}&nbsp;</span>
+            {/* <span>&nbsp;Rupees collected:&nbsp;</span>
+                <span>&nbsp;{renderYesNo(this.state.rupeesCollected)}&nbsp;</span>*/}
         </>;
-            {/* &nbsp;- Rupees collected: {renderYesNo(this.state.rupeesCollected)} */};
     }
 }
 
@@ -768,7 +769,7 @@ class MainMap extends React.Component {
     }
 
     recomputePotentialMatches() {
-        const [observedBoards, _1, _2] = this.makeGameHistoryArguments();
+        const observedBoards = this.makeGameHistoryArguments()[0];
         const matches = [];
         if (observedBoards.length > 0)
             for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
@@ -931,14 +932,14 @@ class MainMap extends React.Component {
 
         if (this.state.mode === 'calculator') {
             switch (gridValue) {
-                case null:
-                    gridValue = setAsHit ? 'HIT' : 'MISS';
-                    break;
                 case 'MISS':
                     gridValue = 'HIT';
                     break;
                 case 'HIT':
                     gridValue = null;
+                    break;
+                default:
+                    gridValue = setAsHit ? 'HIT' : 'MISS';
                     break;
             }
             grid[[x, y]] = gridValue;
@@ -1008,7 +1009,7 @@ class MainMap extends React.Component {
         if (this.state.best !== null && this.state.grid[this.state.best] === null) {
             sendSpywareEvent({kind: 'reportHit', best: this.state.best, oldGrid: this.state.grid});
             this.onClick(...this.state.best, true);
-            const {hits, misses, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
+            const {hits, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
             // This prevents users from having to input the third kill.
             if (hits.length === 9 && numericSquidsGotten === 2) {
                 this.incrementKills();
