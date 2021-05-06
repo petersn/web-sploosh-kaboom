@@ -149,9 +149,9 @@ impl PossibleBoards {
         for (i, pb) in (&self.boards).iter().enumerate() {
             let board_prob = (1e-20 + board_priors[i]) * pb.probability;
             if pb.check_compatible(hit_mask, miss_mask, squids_gotten) {
-                for bit_index in 0..64 {
+                for (bit_index, probability) in probabilities.iter_mut().enumerate() {
                     if (pb.squids & (1 << bit_index)) != 0 {
-                        probabilities[bit_index] += board_prob;
+                        *probability += board_prob;
                     }
                 }
                 total_probability += board_prob;
@@ -163,8 +163,8 @@ impl PossibleBoards {
         }
 
         // Renormalize the distribution.
-        for i in 0..64 {
-            probabilities[i] /= total_probability;
+        for probability in probabilities.iter_mut() {
+            *probability /= total_probability;
         }
 
         Some((probabilities, total_probability))
@@ -178,13 +178,10 @@ impl PossibleBoards {
         prior_steps_from_previous_stddevs: &[f64],
     ) -> Vec<f64> {
         // We must compute the boards and their corresponding probabilities from our observations.
-        let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-        for _ in 0..604584 {
-            board_priors.push(0.0);
-        }
+        let mut board_priors = vec![0.0; 604584];
         fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
             let z = x / sigma;
-            return (z * z / -2.0).exp();
+            (z * z / -2.0).exp()
         }
         fn scan_from(
             depth: usize, starting_index: usize, prob: f64,
@@ -307,7 +304,7 @@ pub fn calculate_probabilities_with_board_constraints(
 ) -> Option<Vec<f64>> {
     let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
     for _ in 0..604584 {
-        board_priors.push(if board_constraints.len() == 0 { 1.0 } else { 0.0 });
+        board_priors.push(if board_constraints.is_empty() { 1.0 } else { 0.0 });
     }
     for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
         board_priors[*board_index as usize] = *prior_prob;
@@ -385,8 +382,8 @@ pub fn disambiguate_final_board(
 }
 
 #[wasm_bindgen]
-pub fn set_board_table(board_table: &[u32]) -> () {
-    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>());
+pub fn set_board_table(board_table: &[u32]) {
+    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>()).unwrap();
 }
 
 #[cfg(test)]
