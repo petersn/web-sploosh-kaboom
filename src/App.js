@@ -3,7 +3,7 @@ import './App.css';
 import Collapsible from 'react-collapsible';
 import init, {
     set_board_table,
-    calculate_probabilities_with_board_constraints,
+    calculate_probabilities_without_sequence,
     calculate_probabilities_from_game_history,
     disambiguate_final_board,
 } from './wasm/sploosh_wasm.js';
@@ -38,44 +38,30 @@ function dbWrite(key, value) {
 
     const transaction = globalDB.transaction(['sk'], 'readwrite');
 
-    transaction.oncomplete = function(event) {
-        //alert('Transaction complete!');
-    }
     transaction.onerror = function(event) {
         alert('Transaction error!');
     }
-    const objectStore = transaction.objectStore('sk');
-    const request = objectStore.add(value, key);
-    request.onsuccess = function(event) {
-        //alert('Request success!');
-    }
+    transaction.objectStore('sk').add(value, key);
 }
 
 function dbRead(key) {
     return new Promise((resolve, reject) => {
         const transaction = globalDB.transaction(['sk']);
 
-        transaction.oncomplete = function(event) {
-            //alert('Transaction complete!');
-        }
         transaction.onerror = function(event) {
             alert('Transaction error!');
         }
         const objectStore = transaction.objectStore('sk');
         const request = objectStore.get(key);
         request.onsuccess = function(event) {
-            //alert('Request success!');
             resolve(event.target.result);
         };
         request.onerror = function(event) {
-            //alert('Request failure!');
             reject();
         };
     });
 }
 
-//const colormap = interpolate(['#004', '#090', '#0a0', 'green']);
-//const colormap = interpolate(['#004', '#0a0', '#0d0', '#0f0', '#6f6']);
 // .        . . . .
 // 0123456789abcdef
 const colormap = interpolate(['#004', '#070', '#090', '#0b0', '#0d0', '#0f0', '#6f6']);
@@ -106,9 +92,6 @@ class Tile extends React.Component {
                 zIndex: isBest ? 1 : 0,
                 fontFamily: 'monospace',
                 userSelect: 'none',
-                MozUserSelect: 'none',
-                WebkitUserSelect: 'none',
-                msUserSelect: 'none',
                 color: 'white',
                 fontSize: this.props.fontSize,
                 opacity: this.props.opacity,
@@ -246,7 +229,6 @@ async function sendSpywareEvent(eventData) {
         return;
     eventData.timestamp = (new Date()).getTime() / 1000;
     globalSpywareCounter++;
-    //console.log('Sending spyware event:', globalSpywareCounter, eventData);
     const body = JSON.stringify({
         username: globalSpyware.state.username,
         token: globalSpyware.state.token,
@@ -540,11 +522,9 @@ class BoardTimer extends React.Component {
         globalBoardTimer = this;
         this.state = {
             previouslyAccumulatedSeconds: 0.0,
-            //previouslyAccumulatedRupeeSeconds: 0.0,
             timerStartMS: 0.0,
             timerRunning: false,
             includesLoadingTheRoom: true,
-            //rupeesCollected: false,
             includedRewardsGotten: 0,
             invalidated: false,
         };
@@ -573,13 +553,6 @@ class BoardTimer extends React.Component {
         sendSpywareEvent({kind: 'timer_toggleInvalidated', oldState: this.state});
         this.setState({invalidated: !this.state.invalidated});
     }
-
-    /*
-    toggleRupeesCollected() {
-        // TODO: Appropriately perform accumulation, then change the rate.
-        this.setState({rupeesCollected: !this.state.rupeesCollected});
-    }
-    */
 
     resetTimer() {
         sendSpywareEvent({kind: 'timer_resetTimer', oldState: this.state});
@@ -624,8 +597,6 @@ class BoardTimer extends React.Component {
             <span>&nbsp;{renderYesNo(this.state.includesLoadingTheRoom)}&nbsp;</span>
             <span>&nbsp;Rewards gotten:&nbsp;</span>
             <span>&nbsp;{this.state.includedRewardsGotten}&nbsp;</span>
-            {/* <span>&nbsp;Rupees collected:&nbsp;</span>
-                <span>&nbsp;{renderYesNo(this.state.rupeesCollected)}&nbsp;</span>*/}
         </>;
     }
 }
@@ -646,11 +617,6 @@ const defaultConfigurationParams = {
 };
 
 class MainMap extends React.Component {
-    videoRef = React.createRef();
-    canvasRef = React.createRef();
-    //referenceCanvasRef = React.createRef();
-    outputCanvasRef = React.createRef();
-    hiddenAreaRef = React.createRef();
     layoutDrawingBoardRefs = [React.createRef(), React.createRef(), React.createRef()];
     timerRef = React.createRef();
 
@@ -658,7 +624,6 @@ class MainMap extends React.Component {
         super();
         this.state = this.makeEmptyState();
         globalMap = this;
-        this.previouslyReadStates = [null, null, null];
     }
 
     componentDidMount() {
@@ -870,13 +835,10 @@ class MainMap extends React.Component {
                 ...gameHistoryArguments,
             );
         } else {
-            probabilities = calculate_probabilities_with_board_constraints(
+            probabilities = calculate_probabilities_without_sequence(
                 Uint8Array.from(hits),
                 Uint8Array.from(misses),
                 numericSquidsGotten,
-                // No constraints for now.
-                Uint32Array.from([]),
-                Float64Array.from([]),
             );
         }
 
@@ -1083,7 +1045,6 @@ class MainMap extends React.Component {
         );
         if (finalBoard === undefined) {
             // TODO: Show a proper error message in this case!
-            //alert('Ambiguous!');
             sendSpywareEvent({
                 kind: 'ambiguousCopyToHistory',
                 grid: this.state.grid,
@@ -1115,7 +1076,7 @@ class MainMap extends React.Component {
         drawingBoards[drawingBoards.length - 1].clearBoard();
     }
 
-    renderActualMap(overlayMode) {
+    renderActualMap() {
         return <div style={{justifySelf: 'center'}}>
             {naturalsUpTo(8).map(
                 (y) => <div key={y} style={{
@@ -1130,28 +1091,11 @@ class MainMap extends React.Component {
                             prob={this.state.probs[[x, y]]}
                             valid={this.state.valid}
                             best={this.state.best}
-                            precision={overlayMode ? 0 : 2}
-                            opacity={overlayMode ? 0.5 + 0.3 * this.state.probs[[x, y]] : undefined}
+                            precision={2}
                         />
                     )}
                 </div>
             )}
-        </div>;
-    }
-
-    renderOverlayMap() {
-        if (!this.state.doVideoProcessing)
-            return;
-        return <div style={{
-            position: 'absolute',
-            top: '210px',
-            left: '127px',
-            transform: 'scale(1.01, 1.05)',
-            zIndex: 20,
-            display: 'inline-block',
-            /* opacity: 0.4, */
-        }}>
-            {this.renderActualMap(true)}
         </div>;
     }
 
@@ -1201,8 +1145,7 @@ class MainMap extends React.Component {
                         }</button>
                     </>}
                 </div>
-                {this.state.doVideoProcessing || this.renderActualMap(false)}
-                <span style={{display: "inline-block"}}></span>
+                {this.renderActualMap()}
             </div>
             {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
             <br />
@@ -1226,12 +1169,6 @@ class MainMap extends React.Component {
                     <option value="2">2</option>
                     <option value="3">3</option>
                 </select>
-                <br />
-                {/*
-                <span style={{color: 'white', fontSize: '80%'}}>
-                    Probability of this pattern yielding these results: {(100 * this.state.observationProb).toFixed(2) + '%'}
-                </span>
-                */}
             </div>
             <br/>
             {
@@ -1280,7 +1217,7 @@ class MainMap extends React.Component {
                 </div>
             </>}
             <br/>
-            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...<br/></div>}
+            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...</div>}
             {this.state.turboBlurboMode === true && <>
                 <div>
                     {this.layoutDrawingBoardRefs.map((ref, i) =>
@@ -1320,7 +1257,7 @@ class MainMap extends React.Component {
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
-                <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.<br/></div>
+                <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.</div>
             </>}
             <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
                 this.initializeTurboBlurboMode(false);
@@ -1332,7 +1269,6 @@ class MainMap extends React.Component {
             {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
             <span style={{color: 'white'}}>Last recompute time: {this.state.lastComputationTime.toFixed(2)}ms</span>
-            <div style={{display: 'none'}} ref={this.hiddenAreaRef}></div>
         </div>;
     }
 }
@@ -1394,8 +1330,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span><br/>
-            <span style={{ color: 'white' }}></span>
+            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span>
         </div>;
     }
 }

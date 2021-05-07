@@ -181,10 +181,7 @@ impl PossibleBoards {
         prior_steps_from_previous_stddevs: &[f64],
     ) -> Vec<f64> {
         // We must compute the boards and their corresponding probabilities from our observations.
-        let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-        for _ in 0..604584 {
-            board_priors.push(0.0);
-        }
+        let mut board_priors = vec![0.0; 604584];
         fn gaussian_pdf(x: f64, sigma: f64) -> f64 {
             let z = x / sigma;
             (z * z / -2.0).exp()
@@ -301,21 +298,12 @@ static BOARD_TABLE: OnceCell<Vec<u32>> = OnceCell::new();
 // Calculates the probabilities for each cell based on the hits, misses and the
 // squids that have already been killed.
 #[wasm_bindgen]
-pub fn calculate_probabilities_with_board_constraints(
+pub fn calculate_probabilities_without_sequence(
     hits: &[u8],
     misses: &[u8],
     squids_gotten: i32,
-    board_constraints: &[u32],
-    constraint_probs: &[f64],
 ) -> Option<Vec<f64>> {
-    let mut board_priors: Vec<f64> = Vec::with_capacity(604584);
-    for _ in 0..604584 {
-        board_priors.push(if board_constraints.len() == 0 { 1.0 } else { 0.0 });
-    }
-    for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
-        board_priors[*board_index as usize] = *prior_prob;
-    }
-
+    let board_priors = vec![1.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
         .do_computation(hits, misses, squids_gotten, &board_priors)?;
