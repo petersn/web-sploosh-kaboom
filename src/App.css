@@ -1,0 +1,59 @@
+.boolText {
+  text-shadow: 0px 0px 2px white;
+}
+
+.board {
+  place-self: start center;
+  display: grid;
+  grid-template: repeat(8, 1fr) / repeat(8, 1fr);
+}
+
+.boardTile {
+  width: 70px;
+  height: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: monospace;
+  user-select: none;
+}
+
+.controls {
+  margin: auto;
+  font-size: 150%;
+}
+
+.controls button, .controls div {
+  font-size: inherit;
+  margin: 10px;
+}
+
+.controls select {
+  font-size: inherit;
+  margin: 0px 0px 0px 20px;
+}
+
+.historyBoardBox {
+  margin: 20px;
+  display: inline-block;
+}
+
+.historyBoard {
+  background-size: 100% 100%;
+  padding: 18px;
+  font-size: 200%;
+}
+
+#settings {
+  width: -moz-fit-content;
+  width: fit-content;
+  margin: auto;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(8, 1fr);
+  justify-items: center;
+}
+
+#settings input {
+  width: 60px;
+  font-size: 120%;
+}

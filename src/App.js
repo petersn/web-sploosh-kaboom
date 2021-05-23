@@ -9,7 +9,7 @@ import init, {
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
 
-const VERSION_STRING = 'v0.0.21';
+const VERSION_STRING = 'v0.0.22';
 
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
@@ -78,22 +78,12 @@ class Tile extends React.Component {
             );
         }
 
-        return <div
+        return <div className="boardTile"
             key={this.props.x + ',' + this.props.y}
             style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                textAlign: 'center',
-                width: '70px',
-                height: '70px',
                 border: this.props.valid ? '1px solid grey' : '1px solid red',
                 outline: isBest ? '4px solid yellow' : '',
                 zIndex: isBest ? 1 : 0,
-                fontFamily: 'monospace',
-                userSelect: 'none',
-                color: 'white',
-                fontSize: this.props.fontSize,
                 opacity: this.props.opacity,
                 backgroundColor,
             }}
@@ -330,7 +320,7 @@ class SpywareModeConfiguration extends React.Component {
             <br/>
             <div style={{marginTop: '20px'}}>
                 <Collapsible trigger={
-                    <div className="clickable" style={{width: '200px', margin: '0px'}}>
+                    <div className="clickable">
                         Access Token
                     </div>
                 }>
@@ -465,21 +455,13 @@ class LayoutDrawingBoard extends React.Component {
         }
         const isSelectedCell = (x, y) => this.state.selectedCell !== null && x === this.state.selectedCell[0] && y === this.state.selectedCell[1];
 
-        return <div style={{
-            margin: '20px',
-            display: 'inline-block',
-            color: 'white',
-        }}>
-            <div style={{
+        return <div className="historyBoardBox">
+            <div className="board historyBoard" style={{
                 backgroundImage: 'url("' + process.env.PUBLIC_URL + '/board_background_square.png")',
-                backgroundSize: '100% 100%',
-                padding: '18px',
             }}>
                 {naturalsUpTo(8).map(
-                    (y) => <div key={y} style={{
-                        display: 'flex',
-                    }}>
-                        {naturalsUpTo(8).map(
+                    (y) =>
+                        naturalsUpTo(8).map(
                             (x) => <Tile
                                 key={x + ',' + y}
                                 x={x} y={y}
@@ -487,12 +469,10 @@ class LayoutDrawingBoard extends React.Component {
                                 text={this.state.grid[[x, y]]}
                                 valid={true}
                                 best={this.state.selectedCell}
-                                fontSize={'200%'}
                                 opacity={isSelectedCell(x, y) || this.state.grid[[x, y]] !== '.' ? 0.6 : 0.2}
                                 backgroundColor={this.state.grid[[x, y]] === '.' ? undefined : 'green'}
                             />
-                        )}
-                    </div>
+                        )
                 )}
             </div><br/>
             Squid Layout: {boardIndex}
@@ -512,8 +492,8 @@ setInterval(
 
 function renderYesNo(bool) {
     return bool ?
-        <span style={{color: 'green', textShadow: '0px 0px 2px white'}}>YES</span> :
-        <span style={{color: 'red', textShadow: '0px 0px 2px white'}}>NO</span>;
+        <span className="boolText" style={{ color: 'green' }}>YES</span> :
+        <span className="boolText" style={{ color: 'red' }}>NO</span>;
 }
 
 class BoardTimer extends React.Component {
@@ -585,8 +565,8 @@ class BoardTimer extends React.Component {
         const elapsed = this.getSecondsElapsed();
         if (this.state.invalidated)
             return <>
-                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>TIMER</span>
-                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>INVALIDATED</span>
+                <span><b>TIMER</b></span>
+                <span><b>INVALIDATED</b></span>
             </>;
         return <>
             <span>&nbsp;Seconds elapsed: </span>
@@ -1077,12 +1057,10 @@ class MainMap extends React.Component {
     }
 
     renderActualMap() {
-        return <div style={{justifySelf: 'center'}}>
+        return <div className="board">
             {naturalsUpTo(8).map(
-                (y) => <div key={y} style={{
-                    display: 'flex',
-                }}>
-                    {naturalsUpTo(8).map(
+                (y) =>
+                    naturalsUpTo(8).map(
                         (x) => <Tile
                             key={x + ',' + y}
                             x={x} y={y}
@@ -1093,8 +1071,7 @@ class MainMap extends React.Component {
                             best={this.state.best}
                             precision={2}
                         />
-                    )}
-                </div>
+                    )
             )}
         </div>;
     }
@@ -1113,11 +1090,10 @@ class MainMap extends React.Component {
         }
         return <div style={{
             margin: '20px',
-            color: 'white',
         }}>
             <div className="container">
-                <div style={{justifySelf: "end", alignSelf: "start"}}>
-                    <div className="tableContainer" style={{gridTemplateColumns: "repeat(2, 1fr)"}}>
+                <div style={{ placeSelf: "start end" }}>
+                    <div className="tableContainer">
                         <span><strong>&nbsp;Item&nbsp;</strong></span>
                         <span><strong>&nbsp;Value&nbsp;</strong></span>
                         <span>&nbsp;Shots used:&nbsp;</span>
@@ -1138,21 +1114,37 @@ class MainMap extends React.Component {
                             <span>&nbsp;Split Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
                         </>}
                     </div>
-                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
-                        <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button><br/>
-                        <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({spywareMode: !this.state.spywareMode}) }}>{
-                            this.state.spywareMode ? <>Disable Spyware Mode</> : <>Enable Spyware Mode</>
-                        }</button>
-                    </>}
+                    {this.state.turboBlurboMode &&
+                        this.state.turboBlurboTiming &&
+                        <div className="controls" style={{ fontSize: '120%' }}>
+                            <button onClick={() => {
+                                this.setState({
+                                    showKeyShortcuts: !this.state.showKeyShortcuts
+                            })}}>
+                                Toggle Show Shortcuts
+                            </button>
+                            <br/>
+                            <button onClick={() => {
+                                this.setState({
+                                    spywareMode: !this.state.spywareMode
+                            })}}>
+                                {
+                                    this.state.spywareMode ? <>Disable</> :
+                                    <>Enable</>
+                                } Spyware Mode
+                            </button>
+                        </div>}
                 </div>
                 {this.renderActualMap()}
             </div>
-            {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
+            {this.state.valid || this.state.turboBlurboMode ||
+                <div style={{ fontSize: '150%' }}>
+                    Invalid configuration! This is not possible.
+                </div>}
             <br />
-            <div style={{ fontSize: '150%' }}>
-                <span style={{ color: 'white' }}>Number of squids killed:</span>
+            <div className="controls">
+                <span>Number of squids killed:</span>
                 <select
-                    style={{ marginLeft: '20px', fontSize: '100%' }}
                     value={this.state.squidsGotten}
                     onChange={(event) => {
                         this.setState({ squidsGotten: event.target.value });
@@ -1171,53 +1163,76 @@ class MainMap extends React.Component {
                 </select>
             </div>
             <br/>
-            {
-                this.state.turboBlurboMode &&
-                <>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.copyToHistory(); }}>Copy to History (h)</button>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
-                </>
-            }
-            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (c)</button>
-            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
-            {
-                this.state.turboBlurboMode ||
-                <select
-                    style={{ marginLeft: '20px', fontSize: '150%' }}
-                    value={this.state.mode}
-                    onChange={(event) => this.setState({ mode: event.target.value })}
-                >
-                    <option value="calculator">Calculator Mode</option>
-                    <option value="practice">Practice Mode</option>
-                </select>
-            }
-            {
-                this.state.turboBlurboMode &&
-                <div style={{display: 'inline-block', margin: '10px', border: '1px solid white', borderRadius: '5px', fontSize: '130%', padding: '5px'}}>
-                    <span style={{margin: '5px'}}>Timer mode:</span>
-                    <input
-                        type="checkbox"
-                        checked={this.state.turboBlurboTiming}
-                        onChange={(event) => this.setState({ turboBlurboTiming: !this.state.turboBlurboTiming })}
-                        style={{
-                            margin: '10px',
-                            transform: 'scale(2)',
-                        }}
-                    />
-                </div>
-            }
-            <br />
+            <div className="controls">
+                {
+                    this.state.turboBlurboMode &&
+                    <>
+                        <button onClick={() => { this.reportMiss(); }}>
+                            Miss (z)
+                        </button>
+                        <button onClick={() => { this.reportHit(); }}>
+                            Hit (x)
+                        </button>
+                        <button onClick={() => { this.copyToHistory(); }}>
+                            Copy to History (h)
+                        </button>
+                        <button onClick={() => { this.shiftHistory(); }}>
+                            Shift History
+                        </button>
+                    </>
+                }
+                <button onClick={() => { this.incrementKills(); }}>
+                    Increment Kills (c)
+                </button>
+                <button onClick={() => { this.clearField(); }}>
+                    Reset
+                </button>
+                {
+                    this.state.turboBlurboMode ||
+                    <select
+                        value={this.state.mode}
+                        onChange={(event) => this.setState({
+                            mode: event.target.value
+                        })}
+                    >
+                        <option value="calculator">Calculator Mode</option>
+                        <option value="practice">Practice Mode</option>
+                    </select>
+                }
+                {
+                    this.state.turboBlurboMode &&
+                    <div style={{
+                        display: 'inline-block',
+                        border: '1px solid white',
+                        borderRadius: '5px',
+                        fontSize: '1.3rem',
+                        padding: '5px'
+                    }}>
+                        <span style={{margin: '5px'}}>Timer mode:</span>
+                        <input
+                            type="checkbox"
+                            checked={this.state.turboBlurboTiming}
+                            onChange={(event) => this.setState({
+                                turboBlurboTiming: !this.state.turboBlurboTiming
+                            })}
+                            style={{
+                                margin: '10px',
+                                transform: 'scale(2)',
+                            }}
+                        />
+                    </div>
+                }
+            </div>
             {openingOptimizer && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
-                <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
+                <div style={{ fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
                     }
                 </div>
             </>}
             <br/>
-            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...</div>}
+            {this.state.turboBlurboMode === 'initializing' &&
+                <div style={{ fontSize: '150%' }}>Downloading table...</div>}
             {this.state.turboBlurboMode === true && <>
                 <div>
                     {this.layoutDrawingBoardRefs.map((ref, i) =>
@@ -1225,25 +1240,72 @@ class MainMap extends React.Component {
                     )}
                 </div>
                 <hr/>
-                <div style={{display:"grid", gridTemplateColumns: "1fr auto 1fr"}}>
-                    <div style={{display:"grid", gridTemplateRows: "1fr 1fr 1fr", gridTemplateColumns: "repeat(8, 1fr)", justifyItems: "center", alignItems: "true", gridColumn: "2"}}>
-                        <div style={{gridRow: "1", gridColumn: "1 / span 8"}}>Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):</div>
-                        <div style={{gridRow: "2", gridColumn: "1"}}>First board mean:     </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "2"}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/>
-                        <div style={{gridRow: "2", gridColumn: "3"}}>First board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "4"}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> 
-                        <div style={{gridRow: "2", gridColumn: "5"}}>Next board mean:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "6"}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/>
-                        <div style={{gridRow: "2", gridColumn: "7"}}>Next board stddev:    </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "8"}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "1"}}>Timed board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "2"}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "3"}}>Timed Tick Intercept: </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "4"}} value={this.state.timedTickIntercept}             onChange={event => this.setState({timedTickIntercept: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "5"}}>Timed Tick Rate:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "6"}} value={this.state.timedTickRate}                  onChange={event => this.setState({timedTickRate: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "7"}}>Room entered offset:  </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "8"}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
+                <div id="settings">
+                    <div style={{ gridColumn: "1 / span 8" }}>
+                        Gaussian RNG step count beliefs (all counts in <i>
+                        thousands</i> of steps, except "Room entered offset"):
                     </div>
+                    <div>First board mean: </div>
+                    <input value={this.state.firstBoardStepsThousands}
+                        onChange={event => this.setState({
+                            firstBoardStepsThousands: event.target.value
+                    })}/>
+                    <div>First board stddev: </div>
+                    <input value={this.state.firstBoardStepsThousandsStdDev}
+                        onChange={event => this.setState({
+                            firstBoardStepsThousandsStdDev: event.target.value
+                    })}/>
+                    <div>Next board mean: </div>
+                    <input value={this.state.nextBoardStepsThousands}
+                        onChange={event => this.setState({
+                            nextBoardStepsThousands: event.target.value
+                    })}/>
+                    <div>Next board stddev: </div>
+                    <input value={this.state.nextBoardStepsThousandsStdDev}
+                        onChange={event => this.setState({
+                            nextBoardStepsThousandsStdDev: event.target.value
+                    })}/>
+                    <div>Timed board stddev: </div>
+                    <input value={this.state.timedBoardStepsThousandsStdDev}
+                        onChange={event => this.setState({
+                            timedBoardStepsThousandsStdDev: event.target.value
+                    })}/>
+                    <div>Timed Tick Intercept: </div>
+                    <input value={this.state.timedTickIntercept}
+                        onChange={event => this.setState({
+                            timedTickIntercept: event.target.value
+                    })}/>
+                    <div>Timed Tick Rate: </div>
+                    <input value={this.state.timedTickRate}
+                        onChange={event => this.setState({
+                            timedTickRate: event.target.value
+                    })}/>
+                    <div>Room entered offset: </div>
+                    <input value={this.state.roomEnteredOffset}
+                        onChange={event => this.setState({
+                            roomEnteredOffset: event.target.value
+                    })}/>
                 </div>
 
-                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.saveConfigParams(); }}>Save Settings</button> &nbsp;
-                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.factoryResetConfigParams(); }}>Reset to Defaults</button>
-                <br/>
+                <div className="controls">
+                    <button onClick={() => { this.saveConfigParams(); }}>
+                        Save Settings
+                    </button>
+                    <span style={{ fontSize: '1rem' }}> &nbsp;</span>
+                    <button onClick={() => { this.factoryResetConfigParams(); }}>
+                        Reset to Defaults
+                    </button>
+                </div>
 
-                <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '2px solid white', borderRadius: '8px', width: '400px', minHeight: '20px', display: 'inline-block'}}>
+                <div style={{
+                    margin: '20px',
+                    fontSize: '130%',
+                    border: '2px solid white',
+                    borderRadius: '8px',
+                    width: '400px',
+                    minHeight: '20px',
+                    display: 'inline-block'
+                }}>
                     {this.state.potentialMatches.map((match, i) => {
                         if (match[0] === null) {
                             return <div key={0}>No Matches Found!</div>
@@ -1257,18 +1319,32 @@ class MainMap extends React.Component {
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
-                <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.</div>
+                <div style={{ fontSize: '150%' }}>
+                    Turbo blurbo mode initialized.
+                </div>
             </>}
-            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.initializeTurboBlurboMode(false);
-            }}>Initialize Turbo Blurbo Mode</button><br/>
-            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.initializeTurboBlurboMode(true);
-            }}>Initialize Turbo Blurbo Mode (big table)</button><br/>
+            <div className="controls">
+                <button disabled={this.state.turboBlurboMode !== false}
+                    onClick={() => {
+                    this.initializeTurboBlurboMode(false);
+                }}>
+                    Initialize Turbo Blurbo Mode
+                </button>
+                <br/>
+                <button disabled={this.state.turboBlurboMode !== false}
+                onClick={() => {
+                    this.initializeTurboBlurboMode(true);
+                }}>
+                    Initialize Turbo Blurbo Mode (big table)
+                </button>
+            </div>
 
             {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
-            <span style={{color: 'white'}}>Last recompute time: {this.state.lastComputationTime.toFixed(2)}ms</span>
+            <span>
+                Last recompute time:&nbsp;
+                {this.state.lastComputationTime.toFixed(2)}ms
+            </span>
         </div>;
     }
 }
@@ -1312,17 +1388,11 @@ function globalShortcutsHandler(evt) {
 document.addEventListener('keydown', globalShortcutsHandler);
 
 class App extends React.Component {
-    componentDidMount() {
-        document.body.style.backgroundColor = '#666';
-    }
-
     render() {
-        return <div style={{
-            textAlign: 'center',
-        }}>
+        return <div>
             <div style={{ display: 'inline-block', width: '600px' }}>
-                <h1 style={{ color: 'white' }}>Sploosh Kaboom Probability Calculator</h1>
-                <p style={{ color: 'white' }}>
+                <h1>Sploosh Kaboom Probability Calculator</h1>
+                <p>
                     This is a tool for computing the likely locations of squids in the sploosh kaboom minigame of The Legend of Zelda: The Wind Waker (both SD and HD versions).
                     Unfortunately it's currently pretty complicated to use correctly.
                     A collection of tutorials will be compiled at some point, hopefully soon.
@@ -1330,7 +1400,10 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span>
+            <span>
+                Made by Peter Schmidt-Nielsen, CryZe, and csunday95
+                ({VERSION_STRING})
+            </span>
         </div>;
     }
 }
