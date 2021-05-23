@@ -1,6 +1,5 @@
 import React from 'react';
 import './App.css';
-import boardBackgroundImage from './board_background.png';
 import Collapsible from 'react-collapsible';
 import init, {
     set_board_table,
@@ -74,6 +73,8 @@ const naturalsUpTo = (n) => [...Array(n).keys()];
 class Tile extends React.Component {
     render() {
         const isBest = this.props.best !== null && this.props.best[0] === this.props.x && this.props.best[1] === this.props.y;
+        let className = 'boardTile' + (this.props.valid ? '' : ' invalid')
+            + (isBest ? ' selected' : '');
 
         let backgroundColor = this.props.backgroundColor;
         if (backgroundColor === undefined) {
@@ -82,21 +83,9 @@ class Tile extends React.Component {
             );
         }
 
-        return <div
+        return <div className={ className }
             key={this.props.x + ',' + this.props.y}
             style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                textAlign: 'center',
-                width: '70px',
-                height: '70px',
-                border: this.props.valid ? '1px solid grey' : '1px solid red',
-                outline: isBest ? '4px solid yellow' : '',
-                zIndex: isBest ? 1 : 0,
-                fontFamily: 'monospace',
-                userSelect: 'none',
-                color: 'white',
                 fontSize: this.props.fontSize,
                 opacity: this.props.opacity,
                 backgroundColor,
@@ -307,16 +296,7 @@ class SpywareModeConfiguration extends React.Component {
     }
 
     render() {
-        return <div style={{
-            fontSize: '120%',
-            margin: '10px',
-            padding: '10px',
-            border: '2px solid white',
-            borderRadius: '8px',
-            width: '450px',
-            display: 'inline-block',
-            backgroundColor: this.state.loggedIn ? '#696' : '#777',
-        }}>
+        return <div id='spywareConfig' className={this.state.loggedIn ? 'logged-in' : undefined}>
             <span style={{fontSize: '120%'}}>Spyware Mode:</span>
             <br/>
             {
@@ -469,16 +449,8 @@ class LayoutDrawingBoard extends React.Component {
         }
         const isSelectedCell = (x, y) => this.state.selectedCell !== null && x === this.state.selectedCell[0] && y === this.state.selectedCell[1];
 
-        return <div style={{
-            margin: '20px',
-            display: 'inline-block',
-            color: 'white',
-        }}>
-            <div style={{
-                backgroundImage: 'url("' + boardBackgroundImage + '")',
-                backgroundSize: '100% 100%',
-                padding: '18px',
-            }}>
+        return <div className='historyBoardContainer'>
+            <div className='historyBoard'>
                 {naturalsUpTo(8).map(
                     (y) => <div key={y} style={{
                         display: 'flex',
@@ -582,8 +554,8 @@ class BoardTimer extends React.Component {
         const elapsed = this.getSecondsElapsed();
         if (this.state.invalidated)
             return <>
-                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>TIMER</span>
-                <span style={{ fontSize: '150%', color: 'white', fontFamily: 'monospace' }}>INVALIDATED</span>
+                <span style={{ fontSize: '150%', fontFamily: 'monospace' }}>TIMER</span>
+                <span style={{ fontSize: '150%', fontFamily: 'monospace' }}>INVALIDATED</span>
             </>;
         return <>
             <span>&nbsp;Seconds elapsed: </span>
@@ -1116,7 +1088,6 @@ class MainMap extends React.Component {
         }
         return <div style={{
             margin: '20px',
-            color: 'white',
         }}>
             <div className="container">
                 <div style={{justifySelf: "end", alignSelf: "start"}}>
@@ -1149,10 +1120,10 @@ class MainMap extends React.Component {
                 </div>
                 {this.renderActualMap()}
             </div>
-            {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%', color: 'white' }}>Invalid configuration! This is not possible.</div>}
+            {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
-                <span style={{ color: 'white' }}>Number of squids killed:</span>
+                <span>Number of squids killed:</span>
                 <select
                     style={{ marginLeft: '20px', fontSize: '100%' }}
                     value={this.state.squidsGotten}
@@ -1196,29 +1167,25 @@ class MainMap extends React.Component {
             }
             {
                 this.state.turboBlurboMode &&
-                <div style={{display: 'inline-block', margin: '10px', border: '1px solid white', borderRadius: '5px', fontSize: '130%', padding: '5px'}}>
+                <div className='timerModeSelection'>
                     <span style={{margin: '5px'}}>Timer mode:</span>
                     <input
                         type="checkbox"
                         checked={this.state.turboBlurboTiming}
                         onChange={(event) => this.setState({ turboBlurboTiming: !this.state.turboBlurboTiming })}
-                        style={{
-                            margin: '10px',
-                            transform: 'scale(2)',
-                        }}
                     />
                 </div>
             }
             <br />
             {openingOptimizer && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
-                <div style={{ color: 'white', fontSize: '120%', marginTop: '20px' }}>
+                <div style={{ fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
                     }
                 </div>
             </>}
             <br/>
-            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%', color: 'white' }}>Downloading table...</div>}
+            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%' }}>Downloading table...</div>}
             {this.state.turboBlurboMode === true && <>
                 <div>
                     {this.layoutDrawingBoardRefs.map((ref, i) =>
@@ -1227,16 +1194,16 @@ class MainMap extends React.Component {
                 </div>
                 <hr/>
                 <div style={{display:"grid", gridTemplateColumns: "1fr auto 1fr"}}>
-                    <div style={{display:"grid", gridTemplateRows: "1fr 1fr 1fr", gridTemplateColumns: "repeat(8, 1fr)", justifyItems: "center", gridColumn: "2"}}>
-                        <div style={{gridRow: "1", gridColumn: "1 / span 8"}}>Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):</div>
-                        <div style={{gridRow: "2", gridColumn: "1"}}>First board mean:     </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "2"}} value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/>
-                        <div style={{gridRow: "2", gridColumn: "3"}}>First board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "4"}} value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/> 
-                        <div style={{gridRow: "2", gridColumn: "5"}}>Next board mean:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "6"}} value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/>
-                        <div style={{gridRow: "2", gridColumn: "7"}}>Next board stddev:    </div><input style={{width: '60px', fontSize: '120%', gridRow: "2", gridColumn: "8"}} value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "1"}}>Timed board stddev:   </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "2"}} value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "3"}}>Timed Tick Intercept: </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "4"}} value={this.state.timedTickIntercept}             onChange={event => this.setState({timedTickIntercept: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "5"}}>Timed Tick Rate:      </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "6"}} value={this.state.timedTickRate}                  onChange={event => this.setState({timedTickRate: event.target.value})}/>
-                        <div style={{gridRow: "3", gridColumn: "7"}}>Room entered offset:  </div><input style={{width: '60px', fontSize: '120%', gridRow: "3", gridColumn: "8"}} value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
+                    <div id='settings' style={{ gridColumn: "2" }}>
+                        <div style={{ gridColumn: "1 / span 8" }}>Gaussian RNG step count beliefs (all counts in <i>thousands</i> of steps, except "Room entered offset"):</div>
+                        <div>First board mean:     </div><input value={this.state.firstBoardStepsThousands}       onChange={event => this.setState({firstBoardStepsThousands: event.target.value})}/>
+                        <div>First board stddev:   </div><input value={this.state.firstBoardStepsThousandsStdDev} onChange={event => this.setState({firstBoardStepsThousandsStdDev: event.target.value})}/>
+                        <div>Next board mean:      </div><input value={this.state.nextBoardStepsThousands}        onChange={event => this.setState({nextBoardStepsThousands: event.target.value})}/>
+                        <div>Next board stddev:    </div><input value={this.state.nextBoardStepsThousandsStdDev}  onChange={event => this.setState({nextBoardStepsThousandsStdDev: event.target.value})}/>
+                        <div>Timed board stddev:   </div><input value={this.state.timedBoardStepsThousandsStdDev} onChange={event => this.setState({timedBoardStepsThousandsStdDev: event.target.value})}/>
+                        <div>Timed Tick Intercept: </div><input value={this.state.timedTickIntercept}             onChange={event => this.setState({timedTickIntercept: event.target.value})}/>
+                        <div>Timed Tick Rate:      </div><input value={this.state.timedTickRate}                  onChange={event => this.setState({timedTickRate: event.target.value})}/>
+                        <div>Room entered offset:  </div><input value={this.state.roomEnteredOffset}              onChange={event => this.setState({roomEnteredOffset: event.target.value})}/>
                     </div>
                 </div>
 
@@ -1244,7 +1211,7 @@ class MainMap extends React.Component {
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.factoryResetConfigParams(); }}>Reset to Defaults</button>
                 <br/>
 
-                <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '2px solid white', borderRadius: '8px', width: '400px', minHeight: '20px', display: 'inline-block'}}>
+                <div id='potentialMatches'>
                     {this.state.potentialMatches?.length === 0 ? <div>No Matches Found!</div>
                         : this.state.potentialMatches?.map((match, i) => {
                             const diffs = match.slice(1);
@@ -1254,7 +1221,7 @@ class MainMap extends React.Component {
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
-                <div style={{ fontSize: '150%', color: 'white' }}>Turbo blurbo mode initialized.</div>
+                <div style={{ fontSize: '150%' }}>Turbo blurbo mode initialized.</div>
             </>}
             <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
                 this.initializeTurboBlurboMode(false);
@@ -1265,7 +1232,7 @@ class MainMap extends React.Component {
 
             {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
-            <span style={{color: 'white'}}>Last recompute time: {this.state.lastComputationTime.toFixed(2)}ms</span>
+            <span>Last recompute time: {this.state.lastComputationTime.toFixed(2)}ms</span>
         </div>;
     }
 }
@@ -1310,17 +1277,11 @@ function globalShortcutsHandler(evt) {
 document.addEventListener('keydown', globalShortcutsHandler);
 
 class App extends React.Component {
-    componentDidMount() {
-        document.body.style.backgroundColor = '#666';
-    }
-
     render() {
-        return <div style={{
-            textAlign: 'center',
-        }}>
+        return <>
             <div style={{ display: 'inline-block', width: '600px' }}>
-                <h1 style={{ color: 'white' }}>Sploosh Kaboom Probability Calculator</h1>
-                <p style={{ color: 'white' }}>
+                <h1>Sploosh Kaboom Probability Calculator</h1>
+                <p>
                     This is a tool for computing the likely locations of squids in the sploosh kaboom minigame of The Legend of Zelda: The Wind Waker (both SD and HD versions).
                     Unfortunately it's currently pretty complicated to use correctly.
                     A collection of tutorials will be compiled at some point, hopefully soon.
@@ -1328,8 +1289,8 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span style={{ color: 'white' }}>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span>
-        </div>;
+            <span>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span>
+        </>;
     }
 }
 

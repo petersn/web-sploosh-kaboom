@@ -1,0 +1,74 @@
+.boardTile {
+  display: flex;
+  width: 70px;
+  height: 70px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  border: 1px solid grey;
+  font-family: monospace;
+  user-select: none;
+}
+.boardTile.invalid {
+  border-color: red;
+}
+.boardTile.selected {
+  outline: 4px solid yellow;
+  z-index: 1;
+}
+
+.timerModeSelection {
+  display: inline-block;
+  margin: 10px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 130%;
+  padding: 5px;
+}
+.timerModeSelection input[type=checkbox] {
+  margin: 10px;
+  transform: scale(2);
+}
+
+.historyBoardContainer {
+  display: inline-block;
+  margin: 20px;
+}
+.historyBoard {
+  background: center / 100% 100% url('./board_background.png');
+  padding: 18px;
+}
+
+#settings {
+  display: grid;
+  grid: repeat(3, 1fr) / repeat(8, 1fr);
+  justify-items: center;
+}
+#settings > input {
+  width: 60px;
+  font-size: 120%;
+}
+
+#potentialMatches {
+  display: inline-block;
+  width: 400px;
+  min-height: 20px;
+  margin: 20px;
+  font-size: 130%;
+  border: 2px solid;
+  border-radius: 8px;
+}
+
+#spywareConfig {
+  display: inline-block;
+  width: 450px;
+  font-size: 120%;
+  margin: 10px;
+  padding: 10px;
+  border: 2px solid;
+  border-radius: 8px;
+  background: #777;
+}
+#spywareConfig.logged-in {
+  background: #696;
+}
