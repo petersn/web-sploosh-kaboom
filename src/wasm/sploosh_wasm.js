@@ -63,28 +63,22 @@ function getArrayF64FromWasm0(ptr, len) {
 * @param {Uint8Array} hits
 * @param {Uint8Array} misses
 * @param {number} squids_gotten
-* @param {Uint32Array} board_constraints
-* @param {Float64Array} constraint_probs
 * @returns {Float64Array | undefined}
 */
-export function calculate_probabilities_with_board_constraints(hits, misses, squids_gotten, board_constraints, constraint_probs) {
+export function calculate_probabilities_without_sequence(hits, misses, squids_gotten) {
     var ptr0 = passArray8ToWasm0(hits, wasm.__wbindgen_malloc);
     var len0 = WASM_VECTOR_LEN;
     var ptr1 = passArray8ToWasm0(misses, wasm.__wbindgen_malloc);
     var len1 = WASM_VECTOR_LEN;
-    var ptr2 = passArray32ToWasm0(board_constraints, wasm.__wbindgen_malloc);
-    var len2 = WASM_VECTOR_LEN;
-    var ptr3 = passArrayF64ToWasm0(constraint_probs, wasm.__wbindgen_malloc);
-    var len3 = WASM_VECTOR_LEN;
-    wasm.calculate_probabilities_with_board_constraints(8, ptr0, len0, ptr1, len1, squids_gotten, ptr2, len2, ptr3, len3);
+    wasm.calculate_probabilities_without_sequence(8, ptr0, len0, ptr1, len1, squids_gotten);
     var r0 = getInt32Memory0()[8 / 4 + 0];
     var r1 = getInt32Memory0()[8 / 4 + 1];
-    let v4;
+    let v2;
     if (r0 !== 0) {
-        v4 = getArrayF64FromWasm0(r0, r1).slice();
+        v2 = getArrayF64FromWasm0(r0, r1).slice();
         wasm.__wbindgen_free(r0, r1 * 8);
     }
-    return v4;
+    return v2;
 }
 
 /**

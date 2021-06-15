@@ -3,7 +3,7 @@ import './App.css';
 import Collapsible from 'react-collapsible';
 import init, {
     set_board_table,
-    calculate_probabilities_with_board_constraints,
+    calculate_probabilities_without_sequence,
     calculate_probabilities_from_game_history,
     disambiguate_final_board,
 } from './wasm/sploosh_wasm.js';
@@ -797,13 +797,10 @@ class MainMap extends React.Component {
                 ...gameHistoryArguments,
             );
         } else {
-            probabilities = calculate_probabilities_with_board_constraints(
+            probabilities = calculate_probabilities_without_sequence(
                 Uint8Array.from(hits),
                 Uint8Array.from(misses),
                 numericSquidsGotten,
-                // No constraints for now.
-                Uint32Array.from([]),
-                Float64Array.from([]),
             );
         }
 

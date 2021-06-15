@@ -295,18 +295,12 @@ static BOARD_TABLE: OnceCell<Vec<u32>> = OnceCell::new();
 // Calculates the probabilities for each cell based on the hits, misses and the
 // squids that have already been killed.
 #[wasm_bindgen]
-pub fn calculate_probabilities_with_board_constraints(
+pub fn calculate_probabilities_without_sequence(
     hits: &[u8],
     misses: &[u8],
     squids_gotten: i32,
-    board_constraints: &[u32],
-    constraint_probs: &[f64],
 ) -> Option<Vec<f64>> {
-    let mut board_priors = vec![0.0; 604584];
-    for (board_index, prior_prob) in board_constraints.iter().zip(constraint_probs) {
-        board_priors[*board_index as usize] = *prior_prob;
-    }
-
+    let board_priors = vec![0.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
         .do_computation(hits, misses, squids_gotten, &board_priors)?;
