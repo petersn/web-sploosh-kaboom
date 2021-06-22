@@ -1,9 +1,6 @@
 use once_cell::sync::OnceCell;
 use wasm_bindgen::prelude::*;
 
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 struct PossibleBoard {
     squids: u64,
     squid2: u64,
