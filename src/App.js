@@ -1292,12 +1292,14 @@ class MainMap extends React.Component {
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
                 <div style={{ fontSize: '150%' }}>Sequence-aware mode initialized.</div>
             </>}
-            <button disabled={this.state.sequenceAware !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.loadSequenceTable(false);
-            }}>Initialize Sequence-Aware Mode</button><br/>
-            <button disabled={this.state.sequenceAware !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.loadSequenceTable(true);
-            }}>Initialize Sequence-Aware Mode (big table)</button><br/>
+            {!this.state.sequenceAware && <div>
+                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                    this.loadSequenceTable(false);
+                }}>Initialize Sequence-Aware Mode</button><br/>
+                <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                    this.loadSequenceTable(true);
+                }}>Initialize Sequence-Aware Mode (big table)</button>
+            </div>}
 
             {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
