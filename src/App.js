@@ -555,6 +555,9 @@ class BoardTimer extends React.Component {
         if (evt.target?.getAttribute?.('data-stop-shortcuts'))
             return;
 
+        if (evt.ctrlKey || evt.altKey)
+            return;
+
         if (evt.code === 'Comma')
             if (evt.shiftKey)
                 this.adjustRewards(-1);
@@ -1087,22 +1090,26 @@ class MainMap extends React.Component {
         if (evt.target?.getAttribute?.('data-stop-shortcuts'))
             return;
 
-        if (evt.key.toLowerCase() === 'z' && evt.ctrlKey) {
+        if (evt.altKey)
+            return;
+
+        if (evt.ctrlKey) {
             // Prevent modifying an input when undoing.
-            if (evt.target?.tagName !== "INPUT") {
+            if (evt.key.toLowerCase() === 'z' && evt.target?.tagName !== "INPUT") {
                 evt.preventDefault();
                 this.undoLastMarking();
             }
-        }
-        else if (evt.code === 'KeyZ')
-            this.reportMiss();
-        if (evt.code === 'KeyX')
-            this.reportHit();
-        if (evt.code === 'KeyC')
-            this.incrementKills();
-        if (evt.code === 'Space') {
-            this.splitTimer();
-            evt.preventDefault();
+        } else {
+            if (evt.code === 'KeyZ')
+                this.reportMiss();
+            if (evt.code === 'KeyX')
+                this.reportHit();
+            if (evt.code === 'KeyC')
+                this.incrementKills();
+            if (evt.code === 'Space') {
+                this.splitTimer();
+                evt.preventDefault();
+            }
         }
     }
 
