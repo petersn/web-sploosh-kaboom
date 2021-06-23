@@ -298,16 +298,17 @@ impl PossibleBoards {
         self.do_computation(state, Some(&board_priors))
     }
 
-    pub fn disambiguate_final_board(
+    pub fn disambiguate_board(
         &self,
         board_table: &[u32],
-        hits: &[u8],
+        state: &GameState,
         history: &History,
     ) -> Option<u32> {
         let mut match_indices = Vec::new();
-        let hit_mask = make_mask(hits);
+        let hit_mask = make_mask(&state.hits);
+        let miss_mask = make_mask(&state.misses);
         for (i, board) in self.boards.iter().enumerate() {
-            if board.check_compatible(hit_mask, 0, 3) {
+            if board.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
                 match_indices.push(i);
             }
         }
@@ -412,8 +413,10 @@ pub fn calculate_probabilities_from_game_history(
 }
 
 #[wasm_bindgen]
-pub fn disambiguate_final_board(
+pub fn disambiguate_board(
     hits: &[u8],
+    misses: &[u8],
+    squids_gotten: i32,
     observed_boards: &[u32],
     prior_steps_from_previous_means: &[u32],
     prior_steps_from_previous_stddevs: &[f64],
@@ -422,6 +425,11 @@ pub fn disambiguate_final_board(
     let board_table = match BOARD_TABLE.get() {
         Some(v) => v,
         None => &fake_board_table,
+    };
+    let state = GameState {
+        hits: hits.to_vec(),
+        misses: misses.to_vec(),
+        squids_gotten,
     };
     let history = History {
         observed_boards: observed_boards.to_vec(),
@@ -433,9 +441,9 @@ pub fn disambiguate_final_board(
         .get_or_init(|| Mutex::new(PossibleBoards::new()))
         .lock()
         .unwrap()
-        .disambiguate_final_board(
+        .disambiguate_board(
             board_table,
-            hits,
+            &state,
             &history,
         )
 }

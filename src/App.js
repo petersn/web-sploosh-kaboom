@@ -5,7 +5,7 @@ import init, {
     set_board_table,
     calculate_probabilities_without_sequence,
     calculate_probabilities_from_game_history,
-    disambiguate_final_board,
+    disambiguate_board,
 } from './wasm/sploosh_wasm.js';
 const interpolate = require('color-interpolate');
 
@@ -1052,12 +1052,14 @@ class MainMap extends React.Component {
     async copyToHistory(gameHistoryArguments) {
         if (this.state.sequenceAware !== true)
             return;
-        const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
+        const {hits, misses, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
         if (gameHistoryArguments === undefined)
             gameHistoryArguments = this.makeGameHistoryArguments();
         await wasm;
-        const finalBoard = disambiguate_final_board(
+        const finalBoard = disambiguate_board(
             Uint8Array.from(hits),
+            Uint8Array.from(misses),
+            numericSquidsGotten,
             ...gameHistoryArguments,
         );
         if (finalBoard === undefined) {
