@@ -237,8 +237,6 @@ ranges, meaning that the exact board can be determined sooner.
 
 Want to suggest feedback? Log an issue under the "Issues" tab. 
 
-Want to discuss this tool further in depth? Join the [Linkus7 Discord](https://discord.gg/linkus7), and chat in the #sploosh-kaboom channel.
-
 ## Temporary Credit Page
 
 This is incomplete and just a random listing of those that have contributed in the #sploosh-kaboom channel:
