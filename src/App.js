@@ -653,7 +653,7 @@ class MainMap extends React.Component {
             lastComputationTime: -1,
 
             sequenceAware: false,
-            usingTimer: false,
+            usingTimer: true,
             showKeyShortcuts: false,
             spywareMode: false,
 
