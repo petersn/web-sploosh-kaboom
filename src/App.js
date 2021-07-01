@@ -1120,7 +1120,7 @@ class MainMap extends React.Component {
                 </div>
                 {this.renderActualMap()}
             </div>
-            {this.state.valid || this.state.turboBlurboMode || <div style={{ fontSize: '150%' }}>Invalid configuration! This is not possible.</div>}
+            {!this.state.valid && !this.state.turboBlurboMode && <div style={{ fontSize: '150%' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
                 <span>Number of squids killed:</span>
@@ -1134,7 +1134,7 @@ class MainMap extends React.Component {
                 >
                     {/* In turbo blurbo mode don't allow unknown, because it's just an accident waiting to happen for a runner. */}
                     {
-                        this.state.turboBlurboMode ||
+                        !this.state.turboBlurboMode &&
                         <option value="unknown">Unknown</option>
                     }
                     <option value="0">0</option>
@@ -1155,7 +1155,7 @@ class MainMap extends React.Component {
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (c)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
             {
-                this.state.turboBlurboMode ||
+                !this.state.turboBlurboMode &&
                 <select
                     style={{ marginLeft: '20px', fontSize: '150%' }}
                     value={this.state.mode}
