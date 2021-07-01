@@ -813,7 +813,7 @@ class MainMap extends React.Component {
         await wasm;
         let probabilities;
         let gameHistoryArguments = null;
-        if (this.state.sequenceAware) {
+        if (this.state.sequenceAware === true) {
             gameHistoryArguments = this.makeGameHistoryArguments();
             console.log('gameHistoryArguments:', gameHistoryArguments);
 
@@ -1050,7 +1050,7 @@ class MainMap extends React.Component {
     }
 
     async copyToHistory(gameHistoryArguments) {
-        if (!this.state.sequenceAware)
+        if (this.state.sequenceAware !== true)
             return;
         const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
         if (gameHistoryArguments === undefined)
@@ -1166,12 +1166,12 @@ class MainMap extends React.Component {
                         <span><strong>&nbsp;Value&nbsp;</strong></span>
                         <span>&nbsp;Shots used:&nbsp;</span>
                         <span>&nbsp;{usedShots}&nbsp;</span>
-                        {this.state.sequenceAware && this.state.usingTimer && <>
+                        {this.state.sequenceAware === true && this.state.usingTimer && <>
                             <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} timedTickIntercept={this.state.timedTickIntercept} timedTickRate={this.state.timedTickRate}/>
                             <span>&nbsp;Last steps:&nbsp;</span>
                             <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
                         </>}
-                        {this.state.sequenceAware && this.state.usingTimer && this.state.showKeyShortcuts && <>
+                        {this.state.sequenceAware === true && this.state.usingTimer && this.state.showKeyShortcuts && <>
                             <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
                             <span>&nbsp;Start/Split Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
                             <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
@@ -1180,7 +1180,7 @@ class MainMap extends React.Component {
                             <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;Shift+;&nbsp;</span>
                         </>}
                     </div>
-                    {this.state.sequenceAware && this.state.usingTimer && <>
+                    {this.state.sequenceAware === true && this.state.usingTimer && <>
                         <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button><br/>
                         <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({spywareMode: !this.state.spywareMode}) }}>{
                             this.state.spywareMode ? <>Disable Spyware Mode</> : <>Enable Spyware Mode</>
@@ -1216,7 +1216,7 @@ class MainMap extends React.Component {
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
             {
-                this.state.sequenceAware &&
+                this.state.sequenceAware === true &&
                 <>
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
                 </>
@@ -1235,7 +1235,7 @@ class MainMap extends React.Component {
                 </select>
             }
             {
-                this.state.sequenceAware &&
+                this.state.sequenceAware === true &&
                 <div className='timerModeSelection'>
                     <span style={{margin: '5px'}}>Timer mode:</span>
                     <input
