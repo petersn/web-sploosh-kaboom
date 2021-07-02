@@ -1236,7 +1236,6 @@ class MainMap extends React.Component {
             {
                 this.state.turboBlurboMode &&
                 <>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.copyToHistory(); }}>Copy to History (h)</button>
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
                 </>
             }
@@ -1354,8 +1353,6 @@ function globalShortcutsHandler(evt) {
         globalMap.splitTimer();
         evt.preventDefault();
     }
-    if (event_key === 'h' && globalMap !== null)
-        globalMap.copyToHistory();
 
     if (event_key === ',' && globalBoardTimer !== null)
         globalBoardTimer.adjustRewards(+1);
