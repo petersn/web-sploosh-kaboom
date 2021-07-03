@@ -1,5 +1,6 @@
 import React from 'react';
 import './App.css';
+import boardBackgroundImage from './board_background.png';
 import Collapsible from 'react-collapsible';
 import init, {
     set_board_table,
@@ -474,7 +475,7 @@ class LayoutDrawingBoard extends React.Component {
             color: 'white',
         }}>
             <div style={{
-                backgroundImage: 'url("' + process.env.PUBLIC_URL + '/board_background_square.png")',
+                backgroundImage: 'url("' + boardBackgroundImage + '")',
                 backgroundSize: '100% 100%',
                 padding: '18px',
             }}>
