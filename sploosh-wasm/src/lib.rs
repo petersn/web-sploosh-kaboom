@@ -28,10 +28,16 @@ impl PossibleBoard {
     }
 }
 
+#[derive(Copy, Clone)]
+enum Orientation {
+    Horizontal,
+    Vertical
+}
+
 struct SquidStartingDesc {
     x: u64,
     y: u64,
-    direction: bool,
+    direction: Orientation,
 }
 
 impl SquidStartingDesc {
@@ -39,10 +45,9 @@ impl SquidStartingDesc {
         for offset in 0..length {
             let mut nx = self.x;
             let mut ny = self.y;
-            if self.direction {
-                nx += offset;
-            } else {
-                ny += offset;
+            match self.direction {
+                Orientation::Horizontal => nx += offset,
+                Orientation::Vertical => ny += offset
             }
             if nx > 7 || ny > 7 {
                 return None;
@@ -105,7 +110,7 @@ impl PossibleBoards {
     pub fn new() -> Self {
         let starting_descs: [_; 128] = array_init::from_iter((0..8).flat_map(|y| {
             (0..8).flat_map(move |x| {
-                [false, true]
+                [Orientation::Vertical, Orientation::Horizontal]
                     .iter()
                     .map(move |&direction| SquidStartingDesc { x, y, direction })
             })
