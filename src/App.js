@@ -1317,7 +1317,7 @@ class App extends React.Component {
                 </p>
             </div>
             <MainMap />
-            <span>Made by Peter Schmidt-Nielsen, CryZe, and csunday95 ({VERSION_STRING})</span>
+            <span>Made by Peter Schmidt-Nielsen, CryZe, csunday95, and Amphitryon ({VERSION_STRING})</span>
         </>;
     }
 }
