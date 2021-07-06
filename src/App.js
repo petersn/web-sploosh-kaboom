@@ -712,7 +712,9 @@ class MainMap extends React.Component {
             // Warning: Do I need to await wasm here first?
             console.log('Board table length:', this.boardTable.length);
             set_board_table(this.boardTable);
-            this.setState({ sequenceAware: true, squidsGotten: '0', mode: 'calculator' });
+            this.setState({ sequenceAware: true, mode: 'calculator' },
+                () => { this.clearField(); }
+            );
         });
     }
 
