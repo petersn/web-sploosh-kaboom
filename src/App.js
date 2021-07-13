@@ -530,7 +530,11 @@ class BoardTimer extends React.Component {
         sendSpywareEvent({kind: 'timer_resetTimer', oldState: this.state});
         this.setState({
             timerRunning: false,
+            includesLoadingTheRoom: true,
+            includedRewardsGotten: 0,
+            invalidated: false,
         });
+        globalMap.setState({ timerStepEstimate: null });
     }
 
     getSecondsElapsed() {
