@@ -283,7 +283,7 @@ accuracy.
 
 Want to suggest feedback? Log an issue under the "Issues" tab. 
 
-Want to discuss this tool further in depth? Join the [Linkus7 Discord](https://discord.gg/linkus7), and chat in the #sploosh-kaboom channel.
+Want to discuss this tool further in depth? Join the [Linkus7 Discord](https://discord.gg/linkus7).
 
 ## Temporary credit page
 
