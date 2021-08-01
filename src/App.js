@@ -1031,6 +1031,12 @@ class MainMap extends React.Component {
         if (boardTimer === null)
             return;
         const elapsed = boardTimer.getSecondsElapsed();
+        // If the timer hasn't been started yet, the purpose of this function
+        // call was to start it, not to actually split.
+        if (elapsed === 0.0 && !boardTimer.state.invalidated) {
+            boardTimer.toggleRunning();
+            return;
+        }
         const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(elapsed);
         this.setState({timerStepEstimate});
         console.log('Timer step estimate:', timerStepEstimate);
@@ -1184,13 +1190,13 @@ class MainMap extends React.Component {
                         </>}
                         {this.state.turboBlurboMode && this.state.turboBlurboTiming && this.state.showKeyShortcuts && <>
                             <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
-                            <span>&nbsp;Toggle Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
+                            <span>&nbsp;Start/Split Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
                             <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
                             <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;&lt;&nbsp;</span>
                             <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
                             <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
                             <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
-                            <span>&nbsp;Split Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
+                            <span>&nbsp;Pause/Resume Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
                         </>}
                     </div>
                     {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
@@ -1351,15 +1357,15 @@ function globalShortcutsHandler(evt) {
         globalMap.reportHit();
     if (event_key === 'c' && globalMap !== null)
         globalMap.incrementKills();
-    if (event_key === 's' && globalMap !== null)
+    if (event_key === ' ' && globalMap !== null) {
         globalMap.splitTimer();
+        evt.preventDefault();
+    }
     if (event_key === 'h' && globalMap !== null)
         globalMap.copyToHistory();
 
-    if (event_key === ' ' && globalBoardTimer !== null) {
+    if (event_key === 's' && globalBoardTimer !== null)
         globalBoardTimer.toggleRunning();
-        evt.preventDefault();
-    }
     if (event_key === ',' && globalBoardTimer !== null)
         globalBoardTimer.adjustRewards(+1);
     if (event_key === '<' && globalBoardTimer !== null)
