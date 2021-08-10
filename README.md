@@ -3,7 +3,7 @@
 # Sploosh Kaboom FAQ
 
 - [What is Sploosh Kaboom?](#what-is-sploosh-kaboom)
-  - [Why is Sploosh Kaboom Required for Hundo?](#why-is-sploosh-kaboom-required-for-wind-waker-100)
+  - [Why is Sploosh Kaboom Required for Hundo?](#why-is-sploosh-kaboom-required-for-the-wind-waker-100)
 - [Solving Sploosh Kaboom](#solving-sploosh-kaboom)
   - [Examining the Statistics](#examining-the-statistics)
   - [Examining the Code](#examining-the-code)
@@ -18,59 +18,58 @@
 
 ## What is Sploosh Kaboom?
 
-Sploosh Kaboom is a minigame in Legend of Zelda: The Wind Waker similar to the 
-classic board game Battleship. In it, the player is presented with an empty board
-within which three ships of varying length are hidden. A player can fire at a
-given grid location and will be presented with a KABOOM if a ship is hit,
-or a SPLOOSH on a miss. The object of the game is to hit and eliminate all ships
-within 24 shots. A ship is eliminated if all grid spaces it occupies are fired
-upon. 
+Sploosh Kaboom is a minigame in The Legend of Zelda: The Wind Waker similar to
+the classic board game Battleship. In it, the player is presented with an empty
+board within which three squid groups of varying length are hidden. A player can
+fire at a given grid location and will be presented with a KABOOM if a squid is
+hit, or a SPLOOSH on a miss. The object of the game is to hit and eliminate all
+three groups within 24 shots. A group is eliminated if all its squids are hit.
 
-### Why is Sploosh Kaboom Required for Wind Waker 100%? 
+### Why is Sploosh Kaboom Required for The Wind Waker 100%?
 
-The Wind Waker 100% rules dictate that all Treasure Charts and Heart Pieces 
+The Wind Waker 100% rules dictate that all Treasure Charts and Pieces of Heart
 must be collected. Sploosh Kaboom grants a Piece of Heart on Link's first win
-and a treasure chart on his second. If Link wins in under twenty shots, he 
-receives another treasure chart. Due to these items, a 100% Speedrun of
-The Wind Waker must complete the Sploosh Kaboom minigame twice and win at 
-least once in under twenty shots. 
+and a Treasure Chart on his second. If Link wins in under 20 shots, he receives
+another Treasure Chart. Due to these items, a 100% speedrun of The Wind Waker
+must complete the Sploosh Kaboom minigame twice and win at least once in under
+20 shots.
 
 ## Solving Sploosh Kaboom
 
-Sploosh Kaboom is a largely luck-based game. If we list all the possible ship
-layouts of the game, we arrive at 604,584 valid board configurations. In Wind
-Waker, the position and orientation of the ships is determined randomly for 
-each play of the game. How, then, can we consistently complete this mini-game
+Sploosh Kaboom is a largely luck-based game. If we list all the possible board
+layouts of the game, we arrive at 604,584 valid board configurations. In The
+Wind Waker, the position and orientation of the squids is determined randomly
+for each play of the game. How, then, can we consistently complete this minigame
 in a time-sensitive context like a speedrun?
 
 ### Examining the Statistics
 
-Sploosh Kaboom play can be optimized by examining the statistical odds of ship
-positioning on the board. By generating every possible valid ship configuration,
-we can perform statistically optimal play by use of a simple algorithm:
+Sploosh Kaboom play can be optimized by examining the statistical odds of squid
+positioning on the board. By generating every possible valid configuration, we
+can perform statistically optimal play by use of a simple algorithm:
 
-1. Generate every possible board configuration that results in a valid ship
-placement. This results in 604,584 possible boards. Initialize a board working set
-with all these boards.
-2. Determine the probability each board space contains a ship by checking what
-fraction of the working board set has a ship in that space. 
-3. Fire upon whatever empty space has the highest statistical odds of containing
-a ship.
+1. Generate every possible board configuration that results in valid squid
+placements. This results in 604,584 possible boards. Initialize a working board
+set with all these boards.
+2. Determine the probability each board space contains a squid by checking what
+fraction of the working board set has a squid in that space.
+3. Fire upon whatever unchecked space has the highest statistical odds of
+containing a squid.
 4. Based on the current game state (hits, misses, unchecked spaces, and
-eliminated ship count), determine what subset of the board working set is
-consistent with the game state. This subset is the new board working set.
+eliminated group count), determine what subset of the working board set is
+consistent with the game state. This subset is the new working board set.
 5. Repeat from step (2) until the game is complete.
 
 This statistics-based algorithm can be further refined by optimizing opening
-patterns to quickly find ships and eliminate board possibilities. This algorithm
-makes the most likely choice at each step of the game, which won't necessarily
-make the best moves overall. However, it is known from analysis of Battleship that
-this type of algorithm is close to optimal. 
+patterns to quickly find squids and eliminate board possibilities. This
+algorithm makes the most likely choice at each step of the game, which won't
+necessarily make the best moves overall. However, it is known from analysis of
+Battleship that this type of algorithm is close to optimal.
 
 ### Examining the Code
 
 In order to exactly understand Sploosh Kaboom, it is necessary to examine the
-code used to generate boards. This code can be obtained from the Wind Waker
+code used to generate boards. This code can be obtained from The Wind Waker's
 game binary by Reverse Engineering techniques. We can determine the section of
 code dedicated to the generation of Sploosh Kaboom boards by examining memory 
 during gameplay. This can be accomplished using the Dolphin Emulator and a 
@@ -78,7 +77,7 @@ memory monitoring tool called Dolphin Memory Engine. Once the relevant segment
 of the code is determined, it can be reverse engineered from machine code into
 a C approximation using PowerPC reverse engineering tools. Ghidra was used to 
 approximate the C code for the Sploosh Kaboom board generation algorithm and
-the Random Number Generator of Wind Waker. Pseudocode of the findings is as
+the Random Number Generator of The Wind Waker. Pseudocode of the findings is as
 follows:
 
 #### Board Generation Algorithm
@@ -136,7 +135,7 @@ The full reverse engineered code can be found [here](https://pastebin.com/010PBg
 
 #### RNG Algorithm
 
-Wind Waker makes use of the Wichmann-Hill PRNG, presented in pseudocode as
+The Wind Waker makes use of the Wichmann-Hill PRNG, presented in pseudocode as
 follows:
 
 ``` C
@@ -191,11 +190,11 @@ console boot up out to some arbitrarily large maximum. We then have a mapping of
 
 for an arbitrarily large number of RNG states proceeding from the moment the console is turned on. We can then generate a reverse mapping of
 
-`board ship placement` -> `Possible RNG States`
+`board layout` -> `Possible RNG States`
 
 for every board that can occur. If we create a map of a sufficiently large amount of 
 RNG steps, we can cover all possible RNG states for when Sploosh Kaboom is reached 
-in a run. If the runner then completes a single game of sploosh, we index into the reverse
+in a run. If the runner then completes a single game, we index into the reverse
 map with the board of that attempt. 
 
 `reverse_map[board1] -> rng_state_set`
@@ -229,17 +228,18 @@ Those boards can then be used to play optimally with the statistical
 algorithm. After each subsequent game is completed, the set of possible RNG states
 can be further narrowed based on which indices within the RNG state map are 
 consistent with both known boards. Once sufficiently narrowed, the set of RNG states
-becomes small enough we can predict the ship positionings very accurately. 
+becomes small enough we can predict the squid positionings very accurately.
 
 ### Worked Example
 
-Say a runner arrives at sploosh-kaboom after approximately 45 minutes of gameplay. 
+Say a runner arrives at Sploosh Kaboom after approximately 45 minutes of
+gameplay.
 
 1. The RNG state will have advanced from the fixed seed of `(100, 100, 100)` on the
 order of 100 Million times.
 
-2. The runner plays sploosh kaboom and enters the ship
-locations observed at the end of the game into the program.
+2. The runner plays Sploosh Kaboom and enters the squid locations observed at
+the end of the game into the program.
 
 3. The program determines the given board to be board number 157238 of the ~600,000 
 possible. 
@@ -252,20 +252,20 @@ took place. This set consists of RNG states like
 `(1256, 25792, 319), (256, 1020, 1557)...`.
 
 5. For each RNG state in this set, we move forward in the RNG sequence by approximately
-the amount of RNG cycles used during a Sploosh game (on the order of 1000 steps). Expand
+the amount of RNG cycles used during a game (on the order of 1000 steps). Expand
 this set in either direction along the RNG sequence from each member of the set.
 For instance, if the set contains RNG state numbers `(1123456, 9484594, ...)`,
 expand it to the set
 `(...1123455, 1123456, 1123457..., ...9484593, 9484594, 9484595, ...)`. 
 This margin for error must be large enough to account for variation in the RNG step rate 
-and play time of a sploosh game.
+and play time of a game.
 
 6. Generate a set of possible boards from the expanded set of possible RNG states. 
 
 7. Use this set of boards as the working set used in the statistical method used above with
 greatly improved win odds.
 
-8. After a second game has been completed, enter the ship positions observed. 
+8. After a second game has been completed, enter the squid positions observed.
 
 9. We now revisit our set of RNG states from step (4). The second board will likely be
 present in the margin of error states of a very small subset of the RNG state set, if not in
