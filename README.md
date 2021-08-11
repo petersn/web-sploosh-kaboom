@@ -14,71 +14,65 @@
 - [Feedback](#feedback)
 - [Credits](#temporary-credit-page)
 
-# Sploosh Kaboom Solution Write-Up
-
 ## What is Sploosh Kaboom?
 
 Sploosh Kaboom is a minigame in The Legend of Zelda: The Wind Waker similar to
 the classic board game Battleship. In it, the player is presented with an empty
-board within which three squid groups of varying length are hidden. A player can
-fire at a given grid location and will be presented with a KABOOM if a squid is
-hit, or a SPLOOSH on a miss. The object of the game is to hit and eliminate all
-three groups within 24 shots. A group is eliminated if all its squids are hit.
+board within which three squid groups of varying length are hidden. The player
+can fire at a chosen grid location, which will then show whether a squid was hit
+there. A group is eliminated when all of its squids are hit. The object of the
+game is to eliminate all three groups within 24 shots.
 
 ### Why is Sploosh Kaboom Required for The Wind Waker 100%?
 
-The Wind Waker 100% rules dictate that all Treasure Charts and Pieces of Heart
-must be collected. Sploosh Kaboom grants a Piece of Heart on Link's first win
-and a Treasure Chart on his second. If Link wins in under 20 shots, he receives
-another Treasure Chart. Due to these items, a 100% speedrun of The Wind Waker
-must complete the Sploosh Kaboom minigame twice and win at least once in under
-20 shots.
+The Wind Waker 100% rules require collecting, among other things, all Pieces of
+Heart and Treasure Charts. Sploosh Kaboom grants a Piece of Heart on Link's
+first win and a Treasure Chart on his second. If Link wins in under 20 shots, he
+receives another Treasure Chart. Because these items are required for 100%, a
+100% speedrun of The Wind Waker must beat the Sploosh Kaboom minigame twice and
+win in under 20 shots at least once.
 
 ## Solving Sploosh Kaboom
 
 Sploosh Kaboom is a largely luck-based game. If we list all the possible board
-layouts of the game, we arrive at 604,584 valid board configurations. In The
-Wind Waker, the position and orientation of the squids is determined randomly
-for each play of the game. How, then, can we consistently complete this minigame
-in a time-sensitive context like a speedrun?
+layouts, we arrive at 604,584 configurations. In The Wind Waker, the positions
+and orientations of the squids are determined randomly for each play of the
+game, and every combination is possible. How, then, can we consistently complete
+this minigame in a time-sensitive context like a speedrun?
 
 ### Examining the Statistics
 
-Sploosh Kaboom play can be optimized by examining the statistical odds of squid
-positioning on the board. By generating every possible valid configuration, we
-can perform statistically optimal play by use of a simple algorithm:
+Sploosh Kaboom play can be optimized by examining the probabilities of squid
+positioning on the board. By generating every possible configuration, we can
+perform mostly optimal play by use of a simple algorithm:
 
-1. Generate every possible board configuration that results in valid squid
-placements. This results in 604,584 possible boards. Initialize a working board
-set with all these boards.
+1. Initialize a working board set with all 604,584 possible boards.
 2. Determine the probability each board space contains a squid by checking what
 fraction of the working board set has a squid in that space.
-3. Fire upon whatever unchecked space has the highest statistical odds of
-containing a squid.
+3. Fire upon whatever unchecked space has the highest probability of containing
+a squid.
 4. Based on the current game state (hits, misses, unchecked spaces, and
 eliminated group count), determine what subset of the working board set is
 consistent with the game state. This subset is the new working board set.
-5. Repeat from step (2) until the game is complete.
+5. Repeat from step 2 until the game is complete.
 
-This statistics-based algorithm can be further refined by optimizing opening
-patterns to quickly find squids and eliminate board possibilities. This
-algorithm makes the most likely choice at each step of the game, which won't
-necessarily make the best moves overall. However, it is known from analysis of
-Battleship that this type of algorithm is close to optimal.
+This algorithm makes the most likely choice at each step of the game, which will
+not necessarily result in the best moves overall. However, it is known from
+analysis of Battleship that this type of algorithm is close to optimal. One
+possible refinement is developing an opening pattern to more quickly find a
+squid and eliminate board possibilities.
 
 ### Examining the Code
 
 In order to exactly understand Sploosh Kaboom, it is necessary to examine the
-code used to generate boards. This code can be obtained from The Wind Waker's
-game binary by Reverse Engineering techniques. We can determine the section of
-code dedicated to the generation of Sploosh Kaboom boards by examining memory 
-during gameplay. This can be accomplished using the Dolphin Emulator and a 
-memory monitoring tool called Dolphin Memory Engine. Once the relevant segment
-of the code is determined, it can be reverse engineered from machine code into
-a C approximation using PowerPC reverse engineering tools. Ghidra was used to 
-approximate the C code for the Sploosh Kaboom board generation algorithm and
-the Random Number Generator of The Wind Waker. Pseudocode of the findings is as
-follows:
+code used to generate boards. This code can be obtained by reverse engineering
+The Wind Waker's game binary. We can determine the location of this code by
+examining memory during gameplay, accomplished using the Dolphin emulator and a
+memory monitoring tool called Dolphin Memory Engine. Once the location of the
+code is determined, it can be reverse engineered from PowerPC machine code into
+a C approximation using Ghidra. Both the board generation algorithm and the
+pseudorandom number generator were reverse engineered in this way. Pseudocode of
+the findings is as follows:
 
 #### Board Generation Algorithm
 
@@ -131,7 +125,10 @@ function fits(x, y, shipLength, orientation):  // would the ship fit?
         return True
 ```
 
-The full reverse engineered code can be found [here](https://pastebin.com/010PBgnm). 
+There are a few simplifications made compared to
+[the full code](https://pastebin.com/010PBgnm), namely the removal of some
+bookkeeping operations and unused functionality to place fewer squid groups on
+the board.
 
 #### RNG Algorithm
 
@@ -150,27 +147,23 @@ double rng() {
 }
 ```
 
-This generator makes use of three linear congruential generators that are then
-combined to produce a distribution between zero and one. This generator is
-initialized on console reboot to `s1 = s2 = s3 = 100`, a fixed initial seed.
-The values of `(s1, s2, s3)` at any given time determine what the next value
-of the random number generator will be. We can call this the "state" of the 
-random number generator. Each iteration of the RNG will advance the seed values
-and generate a new random return value. The first few steps of this process 
-can be seen below:
+This generator makes use of three linear congruential generators that are
+combined to produce a distribution between zero and one. The values of
+`(s1, s2, s3)` at any given time determine what the next value of the random
+number generator will be. We can call this the "state" of the random number
+generator. This state is initialized at game startup to `(100, 100, 100)`, a
+fixed initial seed. Each call to the RNG will modify the state and generate a
+new random return value. The first few steps of this process can be seen below:
 
-| s1         | s2         | s3         | return value        | 
-|  ----:     |  ----:     |  ---:      |  ---:               |
-|      100.0 |      100.0 |      100.0 |  0.6930906199656834 |
-|    17100.0 |    17200.0 |    17000.0 |  0.5253911237999249 |
-|    18276.0 |    18621.0 |     9315.0 |  0.1491021216452075 |
-|     7489.0 |    20577.0 |     6754.0 |  0.9526796411193339 |
-|     9321.0 |    23632.0 |    26229.0 |  0.8229855100670485 |
-|    19903.0 |     3566.0 |     1449.0 |  0.8003992983171554 |
-|    ...     |     ...    |     ...    |  ...                |
-
-We can then use the board generation algorithm above to generate a mapping of RNG 
-states to the board it would generate in the game. 
+|    s1 |    s2 |    s3 |       return value |
+| ----: | ----: | ----: | -----------------: |
+|   100 |   100 |   100 | 0.6930906199656834 |
+| 17100 | 17200 | 17000 | 0.5253911237999249 |
+| 18276 | 18621 |  9315 | 0.1491021216452075 |
+|  7489 | 20577 |  6754 | 0.9526796411193339 |
+|  9321 | 23632 | 26229 | 0.8229855100670485 |
+| 19903 |  3566 |  1449 | 0.8003992983171554 |
+|   ... |   ... |   ... |                ... |
 
 ### Solving the Game
 
