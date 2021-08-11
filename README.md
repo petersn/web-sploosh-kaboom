@@ -77,50 +77,50 @@ the findings is as follows:
 #### Board Generation Algorithm
 
 ```c
-board = [8×8 integer grid]      // board[i][j] means the value at col i, row j
+board = [8×8 integer grid]                // board[i][j] means the value at col i, row j
 
-function generate():  // generates a board layout
+function generate():                      // generate a board layout
     // empty the board
     for x from 0 to 8:
         for y from 0 to 8:
             board[x][y] = 0
 
-    // place the ships
-    place(0,2)  // first #0 of length 2
-    place(1,3)  // then #1 of length 3
-    place(2,4)  // then #2 of length 4
+    // place the squids
+    place(2)
+    place(3)
+    place(4)
 
-function place(shipNumber, shipLength):  // places a single ship on the board
-    // generate ships until one fits
-    // rng() gives a uniformly "random" decimal 0 ≤ x < 1, increments the rng state
+function place(length):                   // place a single squid group on the board
+    // generate squid groups until one fits
+    // rng() gives a uniform decimal 0 ≤ x < 1 and increments the rng state
     infinite loop:
-        orientation = floor(rng() * 1000) % 2 // vert. or horiz., 0 or 1, equally-likely
-        x = floor(rng() * 8)            // top/left squid's col, 0–7, equally-likely
-        y = floor(rng() * 8)            // top/left squid's row
-        if fits(x,y,shipLength,orientation):
-            exit loop                   // we've now determined x, y and orientation
+        orientation = floor(rng() * 1000) % 2 // vert. or horiz., 0 or 1, equally likely
+        x = floor(rng() * 8)              // starting col, 0–7, equally likely
+        y = floor(rng() * 8)              // starting row, 0–7, equally likely
+        if fits(x, y, length, orientation):
+            exit loop                     // we've now determined x, y, and orientation
 
-    // place ship
+    // record info in board
     if orientation == 0:
-        for j from 0 to shipLength:             // for each squid
-            board[x][y+j] = 102 + shipNumber    // put 102/103/104 in relevant tile
+        for j from 0 to length:           // for each squid
+            board[x][y+j] = length        // indicate space is occupied
     else:
-        for i from 0 to shipLength:
-            board[x+i][y] = 102 + index
+        for i from 0 to length:
+            board[x+i][y] = length
 
-function fits(x, y, shipLength, orientation):  // would the ship fit?
+function fits(x, y, length, orientation): // would the squids fit?
     if orientation == 0:
-        for j from 0 to shipLength:     // for each tile
-            if x > 7 or y+j > 7:        // is it out-of-bounds?
+        for j from 0 to length:           // for each squid
+            if x > 7 or y+j > 7:          // is it out of bounds?
                 return False
-            if board[x][y+j] > 100:     // does it already have a squid in it?
+            if board[x][y+j] != 0:        // is there already a squid there?
                 return False
-        return True                     // we've checked every tile by now
+        return True                       // we've checked every squid by now
     else:
-        for i from 0 to shipLength:
+        for i from 0 to length:
             if x+i > 7 or y > 7:
                 return False
-            if board[x+i][y] > 100:
+            if board[x+i][y] != 0:
                 return False
         return True
 ```
