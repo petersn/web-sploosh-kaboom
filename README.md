@@ -174,107 +174,71 @@ states to the board it would generate in the game.
 
 ### Solving the Game
 
-Due to the fixed initial seed on console reboot, we can determine every random
-number that the PRNG algorithm will generate for use by the game. Since we know
-the exact algorithm used to generate a Sploosh Kaboom board configuration, we 
-can determine what board configuration a given starting RNG state will create.
-Due to the fixed initial seed of the RNG algorithm detailed above, we can 
-"play forward" the RNG and generate out all future return values for the RNG
-algorithm. During normal gameplay, the RNG is advanced by a variety of different
-game elements at a rate of about 10 - 1000 steps per frame. This means that in the
-first hour of gameplay, the RNG state is advanced on the order of 200 million times.
-We can generate a board state for each of those future values from the moment of 
-console boot up out to some arbitrarily large maximum. We then have a mapping of 
+Due to the fixed RNG seed used at game startup, we can determine every random
+number the game will generate. Since we also know the exact algorithm used to
+generate a Sploosh Kaboom board, we can further determine what board a given
+starting RNG state will create. By considering the fixed succession of RNG
+states as items in a sequence, we can map each state to the board layout it
+produces, giving a sequence of board layouts. The RNG call rate varies greatly
+throughout the game, but it tends to be called on the order of 10 million times
+by the time a speedrunner makes it to Sploosh Kaboom. This is easily few enough
+that we can precompute the board layout sequence, removing the RNG and board
+generation algorithms from consideration at runtime entirely.
 
-`RNG State -> generated board`
+If the runner then completes a single game, we search in the board layout
+sequence for the board that was encountered. This gives us a set of possible
+sequence indices. We know approximately how many times the RNG algorithm is
+called between games, so we add this value to each index to get a set of
+estimated indices for the second board. We initialize a working board set with
+only those boards that appear near the estimated board sequence indices,
+typically on the order of 1,000.
 
-for an arbitrarily large number of RNG states proceeding from the moment the console is turned on. We can then generate a reverse mapping of
-
-`board layout` -> `Possible RNG States`
-
-for every board that can occur. If we create a map of a sufficiently large amount of 
-RNG steps, we can cover all possible RNG states for when Sploosh Kaboom is reached 
-in a run. If the runner then completes a single game, we index into the reverse
-map with the board of that attempt. 
-
-`reverse_map[board1] -> rng_state_set`
-
-This gives us a set of possible RNG states the game could have been in at the 
-time of board generation. We know approximately how long a game takes and 
-approximately how many times the RNG algorithm is called during that game, so 
-we can step each possible RNG state by that amount of calls. Due to uncertainty 
-in how quickly the game was played and exactly how many times the RNG function 
-was stepped, we create a window around each possible RNG state index and add those 
-states in the window to the possible RNG state set. 
-
-```
-foreach state in rng_state_set {
-  rng_state_set.add(nearbyStates(state))
-}
-```
-
-We now take all our set of RNG states and create a set of possible boards using our 
-forward map. 
-
-```
-possible_boards = []
-
-foreach state in rng_state_set {
-  possible_boards.add(forward_map[state])
-}
-```
-
-Those boards can then be used to play optimally with the statistical 
-algorithm. After each subsequent game is completed, the set of possible RNG states
-can be further narrowed based on which indices within the RNG state map are 
-consistent with both known boards. Once sufficiently narrowed, the set of RNG states
-becomes small enough we can predict the squid positionings very accurately.
+We can use this as the initial working board set for the algorithm described
+[above](#examining-the-statistics), greatly increasing the accuracy of our
+predictions. After each subsequent game is completed, the set of possible RNG
+indices can be further narrowed based on which indices are consistent with all
+known boards.
 
 ### Worked Example
 
-Say a runner arrives at Sploosh Kaboom after approximately 45 minutes of
-gameplay.
+Say a runner arrives at Sploosh Kaboom approximately 60 minutes after starting
+the game.
 
-1. The RNG state will have advanced from the fixed seed of `(100, 100, 100)` on the
-order of 100 Million times.
+1. The runner estimates that RNG has been called about 10,000,000 times, with a
+standard deviation of 100,000.
 
-2. The runner plays Sploosh Kaboom and enters the squid locations observed at
-the end of the game into the program.
+2. The runner plays one game and enters the squid locations observed at the end
+of the game into the program.
 
-3. The program determines the given board to be board number 157238 of the ~600,000 
-possible. 
+3. The program searches within the constraints of the runner's RNG estimate and
+finds this board occurs at indices 9,979,965, 9,979,968, 9,993,704, 10,026,312,
+and 10,321,827. It assigns these indices relative probabilities of 24.94%,
+24.94%, 25.40%, 24.58%, and 0.14%.
 
-4. The board can be used to look up
-`board -> rng state set` 
-in the map.
-We now have a set of RNG states we may have been at the moment the board generation
-took place. This set consists of RNG states like 
-`(1256, 25792, 319), (256, 1020, 1557)...`.
+4. Estimating that 7,000 RNG calls happened between generating the first board
+and the second, the program considers the range between 6,000 and 8,000 steps
+after each of the indices it found.
 
-5. For each RNG state in this set, we move forward in the RNG sequence by approximately
-the amount of RNG cycles used during a game (on the order of 1000 steps). Expand
-this set in either direction along the RNG sequence from each member of the set.
-For instance, if the set contains RNG state numbers `(1123456, 9484594, ...)`,
-expand it to the set
-`(...1123455, 1123456, 1123457..., ...9484593, 9484594, 9484595, ...)`. 
-This margin for error must be large enough to account for variation in the RNG step rate 
-and play time of a game.
+5. Each board in each range is given a probability according to a normal
+distribution. Then, the probabilities for each range's boards are multiplied by
+the probability that that is the correct range, i.e., the probabilities
+determined in step 3.
 
-6. Generate a set of possible boards from the expanded set of possible RNG states. 
+6. The program determines a probability map for the game board by adding the
+final probabilities of all the boards to all the squares in which they contain
+squids. This probability map is normalized by dividing the probability of each
+square by the sum of all the boards' probabilities.
 
-7. Use this set of boards as the working set used in the statistical method used above with
-greatly improved win odds.
+7. Every time the runner makes a shot, step 6 is repeated, but only considering
+those boards that are consistent with the current game state.
 
-8. After a second game has been completed, enter the squid positions observed.
+8. The runner finishes the second board.
 
-9. We now revisit our set of RNG states from step (4). The second board will likely be
-present in the margin of error states of a very small subset of the RNG state set, if not in
-exactly one state. We can then extend from the smaller subset of RNG states as we did 
-in step (5). 
+9. The program determines that the first board must have been at index
+9,979,965 or 9,979,968, with the second board in either case being at 9,986,764.
 
-10. For the third game, we now have an extremely small number of possible
-boards, so the statistical method detailed above will be able to predict where
-the squids are with very high accuracy.
+10. The third game proceeds similarly to the second, except that there are fewer
+ranges, meaning that the exact board can be determined sooner.
 
 ## Feedback
 
