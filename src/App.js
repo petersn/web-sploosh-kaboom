@@ -858,7 +858,7 @@ class MainMap extends React.Component {
             this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid, observationProb });
         } else {
             valid = false;
-            this.setState({ valid });
+            this.setState({ valid, best: null });
         }
         const t1 = performance.now();
         this.setState({lastComputationTime: t1 - t0});
