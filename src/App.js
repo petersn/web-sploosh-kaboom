@@ -855,7 +855,7 @@ class MainMap extends React.Component {
                 }
             }
             const observationProb = probabilities[64];
-            this.setState({ probs, best: highestProb >= 0 ? [maxX, maxY] : null, valid, observationProb });
+            this.setState({ probs, best: highestProb > 0 ? [maxX, maxY] : null, valid, observationProb });
         } else {
             valid = false;
             this.setState({ valid, best: null });
