@@ -699,7 +699,7 @@ class MainMap extends React.Component {
 
             timerStepEstimate: null,
 
-            potentialMatches: [],
+            potentialMatches: null,
         };
         // Load relevant configuration from localStorage.
         let savedSettings = localStorage.getItem('SKSettings');
@@ -761,30 +761,27 @@ class MainMap extends React.Component {
     }
 
     *findMatchingLocations(observedBoards, startIndex, scanRange) {
-        if (observedBoards.length === 0) {
-            yield [];
-            return;
-        }
-        // Try to find the first match.
+        // Try to find matches for the next board.
         const soughtBoard = observedBoards[0];
+        const remainingBoards = observedBoards.slice(1);
         const boardTable = this.boardTable;
         const indexMax = Math.min(boardTable.length, startIndex + scanRange);
         for (let i = startIndex; i < indexMax; i++)
             if (boardTable[i] === soughtBoard)
-                for (const subResult of this.findMatchingLocations(observedBoards.slice(1), i, 100000))
-                    yield [i, ...subResult];
+                if (remainingBoards.length > 0)
+                    for (const subResult of this.findMatchingLocations(remainingBoards, i, 100000))
+                        yield [i, ...subResult];
+                else
+                    yield [i];
     }
 
     recomputePotentialMatches() {
         const [observedBoards, _1, _2] = this.makeGameHistoryArguments();
         const matches = [];
-        for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
-            matches.push(match);
+        if (observedBoards.length > 0)
+            for (const match of this.findMatchingLocations(observedBoards, 0, 1000000000))
+                matches.push(match);
         sendSpywareEvent({kind: 'recomputePotentialMatches', matches});
-        if (matches[0].length == 0) {
-            matches.length = 0;
-            matches.push([null, null]);
-        }
         this.setState({potentialMatches: matches});
     }
 
@@ -1306,16 +1303,12 @@ class MainMap extends React.Component {
                 <br/>
 
                 <div style={{margin: '20px', color: 'white', fontSize: '130%', border: '2px solid white', borderRadius: '8px', width: '400px', minHeight: '20px', display: 'inline-block'}}>
-                    {this.state.potentialMatches.map((match, i) => {
-                        if (match[0] === null) {
-                            return <div key={0}>No Matches Found!</div>
-                        }
-                        else {
+                    {this.state.potentialMatches?.length === 0 ? <div>No Matches Found!</div>
+                        : this.state.potentialMatches?.map((match, i) => {
                             const diffs = match.slice(1);
                             return <div key={i}>
                                 Potential match: {match[0]}{diffs.map((x, i) => <> +{x - match[i]}</>)}
                             </div>;
-                        }
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
