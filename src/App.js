@@ -916,7 +916,7 @@ class MainMap extends React.Component {
             grid, hits, misses, numericSquidsGotten,
             oldValid: this.state.valid,
             didWeConcludeTheSituationWasValid: valid,
-            probabilities: Array.from(probabilities),
+            probabilities: Array.from(probabilities ?? []),
             turboBlurboMode: this.state.turboBlurboMode,
             turboBlurboTiming: this.state.turboBlurboTiming,
             gameHistoryArguments: (gameHistoryArguments === null) ? [] : gameHistoryArguments.map(a => Array.from(a)),
