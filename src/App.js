@@ -1020,7 +1020,8 @@ class MainMap extends React.Component {
             sendSpywareEvent({kind: 'reportHit', best: this.state.best, oldGrid: this.state.grid});
             this.onClick(...this.state.best, true);
             const {hits, misses, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
-            if (hits.length === 9) {
+            // This prevents users from having to input the third kill.
+            if (hits.length === 9 && numericSquidsGotten === 2) {
                 this.incrementKills();
             }
         }
