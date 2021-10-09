@@ -1074,6 +1074,8 @@ class MainMap extends React.Component {
     }
 
     async copyToHistory(gameHistoryArguments) {
+        if (!this.state.turboBlurboMode)
+            return;
         const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
         if (gameHistoryArguments === undefined)
             gameHistoryArguments = this.makeGameHistoryArguments();
