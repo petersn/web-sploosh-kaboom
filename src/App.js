@@ -1048,8 +1048,10 @@ class MainMap extends React.Component {
     }
 
     async incrementKills() {
-        this.copyToUndoBuffer();
         let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
+        if (!this.state.turboBlurboMode && numericValue === 3)
+            return;
+        this.copyToUndoBuffer();
         let grid = this.state.grid;
         numericValue++;
         if (numericValue === 4) {
