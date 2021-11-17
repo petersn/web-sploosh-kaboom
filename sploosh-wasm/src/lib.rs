@@ -1,4 +1,7 @@
 use once_cell::sync::OnceCell;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 
 struct PossibleBoard {
@@ -84,6 +87,7 @@ pub struct GameState {
     squids_gotten: i32,
 }
 
+#[derive(PartialEq, Clone)]
 pub struct History {
     observed_boards: Vec<u32>,
     means: Vec<u32>,
@@ -92,6 +96,7 @@ pub struct History {
 
 pub struct PossibleBoards {
     boards: Vec<PossibleBoard>,
+    priors_cache: RefCell<VecDeque<(History, Vec<f64>)>>,
 }
 
 impl PossibleBoards {
@@ -137,6 +142,7 @@ impl PossibleBoards {
 
         Self {
             boards: possible_boards,
+            priors_cache: RefCell::new(VecDeque::with_capacity(16)),
         }
     }
 
@@ -175,7 +181,7 @@ impl PossibleBoards {
         Some((probabilities, total_probability))
     }
 
-    pub fn compute_board_priors(
+    fn compute_board_priors(
         &self,
         board_table: &[u32],
         history: &History,
@@ -226,16 +232,48 @@ impl PossibleBoards {
         board_priors
     }
 
+    pub fn get_board_priors(
+        &self,
+        board_table: &[u32],
+        history: &History,
+    ) -> impl std::ops::Deref<Target = Vec<f64>> + '_ {
+        let match_index = self.priors_cache.borrow().iter().position(
+            |(cached_history, _)| *history == *cached_history
+        );
+        match match_index {
+            Some(i) => {
+                // Move the matched entry to mark most recently used.
+                if i != 0 {
+                    let mut priors_cache = self.priors_cache.borrow_mut();
+                    let entry = priors_cache.remove(i).unwrap();
+                    priors_cache.push_front(entry);
+                }
+            },
+            None => {
+                let mut priors_cache = self.priors_cache.borrow_mut();
+                // Remove the least recently used entry if we're at capacity.
+                if priors_cache.len() == priors_cache.capacity() {
+                    priors_cache.pop_back();
+                }
+
+                let board_priors = self.compute_board_priors(
+                    board_table,
+                    history,
+                );
+                priors_cache.push_front((history.clone(), board_priors));
+            }
+        };
+        // Expose just the priors that are of interest without copying them.
+        std::cell::Ref::map(self.priors_cache.borrow(), |c| &c.front().unwrap().1)
+    }
+
     pub fn do_computation_from_game_history(
         &self,
         board_table: &[u32],
         state: &GameState,
         history: &History
     ) -> Option<([f64; 64], f64)> {
-        let board_priors: Vec<f64> = self.compute_board_priors(
-            board_table,
-            history,
-        );
+        let board_priors = self.get_board_priors(board_table, history);
         self.do_computation(state, &board_priors)
     }
 
@@ -245,30 +283,23 @@ impl PossibleBoards {
         hits: &[u8],
         history: &History,
     ) -> Option<u32> {
-        let mut board_priors: Vec<f64> = self.compute_board_priors(
-            board_table,
-            history,
-        );
+        let board_priors = self.get_board_priors(board_table, history);
 
+        let mut match_indices = Vec::new();
         let hit_mask = make_mask(hits);
-        for (i, pb) in (&self.boards).iter().enumerate() {
-            if ! pb.check_compatible(hit_mask, 0, 3) {
-                board_priors[i] = 0.0;
+        for (i, board) in self.boards.iter().enumerate() {
+            if board.check_compatible(hit_mask, 0, 3) {
+                match_indices.push(i);
             }
         }
 
-        // Normalize the prior.
-        let mut total = 1e-20;
-        for p in &board_priors {
-            total += *p;
-        }
-        for p in &mut board_priors {
-            *p /= total;
-        }
-
-        for (i, p) in board_priors.iter().enumerate() {
-            if *p > 0.9 {
-                return Some(i as u32);
+        // Only return a match if we're confident it is the correct one.
+        let total = match_indices.iter()
+                                 .map(|&i| board_priors[i])
+                                 .sum::<f64>() + 1e-20;
+        for board_index in match_indices {
+            if board_priors[board_index] / total > 0.9 {
+                return Some(board_index as u32);
             }
         }
 
@@ -276,7 +307,7 @@ impl PossibleBoards {
     }
 }
 
-static POSSIBLE_BOARDS: OnceCell<PossibleBoards> = OnceCell::new();
+static POSSIBLE_BOARDS: OnceCell<Mutex<PossibleBoards>> = OnceCell::new();
 static BOARD_TABLE: OnceCell<Vec<u32>> = OnceCell::new();
 
 // Calculates the probabilities for each cell based on the hits, misses and the
@@ -294,7 +325,9 @@ pub fn calculate_probabilities_without_sequence(
     };
     let board_priors = vec![0.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
         .do_computation(&state, &board_priors)?;
 
     let mut values = probabilities.to_vec();
@@ -333,7 +366,9 @@ pub fn calculate_probabilities_from_game_history(
     };
 
     let (probabilities, total_probability) = POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
         .do_computation_from_game_history(
             board_table,
             &state,
@@ -367,7 +402,9 @@ pub fn disambiguate_final_board(
     };
 
     POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
         .disambiguate_final_board(
             board_table,
             hits,
