@@ -149,7 +149,7 @@ impl PossibleBoards {
     pub fn do_computation(
         &self,
         state: &GameState,
-        board_priors: &[f64],
+        board_priors: Option<&[f64]>,
     ) -> Option<([f64; 64], f64)> {
         let hit_mask = make_mask(&state.hits);
         let miss_mask = make_mask(&state.misses);
@@ -157,20 +157,41 @@ impl PossibleBoards {
         let mut total_probability = 0.0;
         let mut probabilities = [0.0; 64];
 
-        for (i, pb) in (&self.boards).iter().enumerate() {
-            if pb.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
-                let board_prob = 1e-20 * pb.probability + board_priors[i];
-                for (bit_index, probability) in probabilities.iter_mut().enumerate() {
-                    if (pb.squids & (1 << bit_index)) != 0 {
-                        *probability += board_prob;
+        // If a list of priors is given, use them to try to create a heatmap.
+        // Otherwise, use the general probabilities expected based on the board
+        // generation algorithm.
+        if let Some(board_priors) = board_priors {
+            for (board, &prior) in self.boards.iter().zip(board_priors) {
+                if prior > 0.0 &&
+                    board.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
+                    for (bit_index, probability) in probabilities.iter_mut().enumerate() {
+                        if (board.squids & (1 << bit_index)) != 0 {
+                            *probability += prior;
+                        }
                     }
+                    total_probability += prior;
                 }
-                total_probability += board_prob;
             }
-        }
-
-        if total_probability == 0.0 {
-            return None;
+            // If the priors don't include the possibility of this state,
+            // fall back to the general probabilities.
+            if total_probability == 0.0 {
+                return self.do_computation(state, None);
+            }
+        } else {
+            for board in self.boards.iter() {
+                if board.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
+                    for (bit_index, probability) in probabilities.iter_mut().enumerate() {
+                        if (board.squids & (1 << bit_index)) != 0 {
+                            *probability += board.probability;
+                        }
+                    }
+                    total_probability += board.probability;
+                }
+            }
+            // If no boards have matched, this state is actually impossible.
+            if total_probability == 0.0 {
+                return None;
+            }
         }
 
         // Renormalize the distribution.
@@ -274,7 +295,7 @@ impl PossibleBoards {
         history: &History
     ) -> Option<([f64; 64], f64)> {
         let board_priors = self.get_board_priors(board_table, history);
-        self.do_computation(state, &board_priors)
+        self.do_computation(state, Some(&board_priors))
     }
 
     pub fn disambiguate_final_board(
@@ -323,19 +344,16 @@ pub fn calculate_probabilities_without_sequence(
         misses: misses.to_vec(),
         squids_gotten,
     };
-    let board_priors = vec![0.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(|| Mutex::new(PossibleBoards::new()))
         .lock()
         .unwrap()
-        .do_computation(&state, &board_priors)?;
+        .do_computation(&state, None)?;
 
     let mut values = probabilities.to_vec();
 
-    // We sneak in the total probability at the end. With the way this value
-    // is calculated, it ranges from 0 to about 1e-20. We scale it up here, to
-    // range from 0 to about 1.
-    values.push(total_probability * 1e20);
+    // We sneak in the total probability at the end.
+    values.push(total_probability);
 
     Some(values)
 }
@@ -429,7 +447,6 @@ mod tests {
             misses: vec![],
             squids_gotten: -1,
         };
-        let priors = vec![0.0; 604584];
-        PossibleBoards::new().do_computation(&state, &priors).unwrap();
+        PossibleBoards::new().do_computation(&state, None).unwrap();
     }
 }
