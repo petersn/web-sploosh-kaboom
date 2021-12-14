@@ -304,8 +304,6 @@ impl PossibleBoards {
         hits: &[u8],
         history: &History,
     ) -> Option<u32> {
-        let board_priors = self.get_board_priors(board_table, history);
-
         let mut match_indices = Vec::new();
         let hit_mask = make_mask(hits);
         for (i, board) in self.boards.iter().enumerate() {
@@ -314,17 +312,29 @@ impl PossibleBoards {
             }
         }
 
-        // Only return a match if we're confident it is the correct one.
-        let total = match_indices.iter()
-                                 .map(|&i| board_priors[i])
-                                 .sum::<f64>() + 1e-20;
-        for board_index in match_indices {
-            if board_priors[board_index] / total > 0.9 {
-                return Some(board_index as u32);
+        let best_match = match match_indices.len() {
+            0 => None,
+            // If there is only one possible match, it must be correct,
+            // even if its prior probability is 0 based on the history.
+            1 => Some(&match_indices[0]),
+            // Return one of the possible boards based on confidence.
+            _ => {
+                let board_priors = self.get_board_priors(board_table, history);
+                let total = match_indices.iter()
+                                         .map(|&i| board_priors[i])
+                                         .sum::<f64>();
+                // We need a match with a positive prior to disambiguate.
+                if total == 0.0 {
+                    None
+                } else {
+                    // Require 90% confidence in a match to return it.
+                    match_indices.iter().find(|&&board_index|
+                        board_priors[board_index] / total > 0.9
+                    )
+                }
             }
-        }
-
-        None
+        };
+        best_match.map(|&m| std::convert::TryInto::try_into(m).unwrap())
     }
 }
 
