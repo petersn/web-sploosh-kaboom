@@ -516,11 +516,6 @@ class BoardTimer extends React.Component {
         this.setState({includedRewardsGotten: Math.max(0, Math.min(2, this.state.includedRewardsGotten + delta))});
     }
 
-    toggleLoadingTheRoom() {
-        sendSpywareEvent({kind: 'timer_toggleLoadingTheRoom', oldState: this.state});
-        this.setState({includesLoadingTheRoom: !this.state.includesLoadingTheRoom});
-    }
-
     toggleInvalidated() {
         sendSpywareEvent({kind: 'timer_toggleInvalidated', oldState: this.state});
         this.setState({invalidated: !this.state.invalidated});
@@ -567,8 +562,6 @@ class BoardTimer extends React.Component {
                 this.adjustRewards(-1);
             else
                 this.adjustRewards(+1);
-        if (evt.code === 'KeyM')
-            this.toggleLoadingTheRoom();
         if (evt.code === 'Semicolon')
             if (evt.shiftKey)
                 this.resetTimer();
@@ -1172,7 +1165,6 @@ class MainMap extends React.Component {
                             <span>&nbsp;Start/Split Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
                             <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
                             <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;Shift+,&nbsp;</span>
-                            <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
                             <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
                             <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;Shift+;&nbsp;</span>
                         </>}
