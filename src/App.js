@@ -976,56 +976,65 @@ class MainMap extends React.Component {
         }
     }
 
-    splitTimer() {
+    async splitTimer() {
         const boardTimer = this.timerRef.current;
-        if (boardTimer === null)
-            return;
-        const elapsed = boardTimer.getSecondsElapsed();
-        // If the timer hasn't been started yet, the purpose of this function
-        // call was to start it, not to actually split.
-        if (elapsed === 0.0 && !boardTimer.state.invalidated) {
-            boardTimer.startRunning();
-            return;
+        let timerStepEstimate;
+        if (boardTimer !== null) {
+            const elapsed = boardTimer.getSecondsElapsed();
+            // If the timer hasn't been started yet, the purpose of this
+            // function call was to start it, not to actually split.
+            if (elapsed === 0.0 && !boardTimer.state.invalidated) {
+                boardTimer.startRunning();
+                return;
+            }
+            const timerStartMS = performance.now();
+            timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(elapsed);
+
+            console.log('Timer step estimate:', timerStepEstimate);
+            sendSpywareEvent({ kind: 'splitTimer', invalidated: boardTimer.state.invalidated, timerStepEstimate: timerStepEstimate, elapsed });
+            boardTimer.setState({
+                timerStartMS,
+                // After the first split we're no longer loading the room.
+                includesLoadingTheRoom: false,
+                includedRewardsGotten: 0,
+                timerRunning: true,
+                invalidated: false,
+            });
         }
-        const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(elapsed);
-        this.setState({timerStepEstimate});
-        console.log('Timer step estimate:', timerStepEstimate);
-        sendSpywareEvent({kind: 'splitTimer', invalidated: boardTimer.state.invalidated, timerStepEstimate: timerStepEstimate, elapsed});
-        boardTimer.setState({
-            timerStartMS: performance.now(),
-            // After the first split we're no longer loading the room.
-            includesLoadingTheRoom: false,
-            includedRewardsGotten: 0,
-            timerRunning: true,
-            invalidated: false,
-        });
-        this.doComputation(this.state.grid, this.state.squidsGotten);
+        // Automatically copy board to history if it is unambiguous.
+        if (await this.copyToHistory()) {
+            const squidsGotten = '0';
+            const grid = this.makeEmptyGrid();
+            // TODO: Allow undoing across completions.
+            this.setState({
+                    timerStepEstimate,
+                    undoBuffer: [],
+                    cursorBelief: [0, 7],
+                    grid,
+                    squidsGotten,
+                }, () => {
+                    // The copy to history should be done by now, even if it
+                    // got batched together with this setState.
+                    this.doComputation(grid, squidsGotten);
+            });
+        } else if (timerStepEstimate !== undefined) {
+            // There are still things to update, even if not finishing a board.
+            this.setState({ timerStepEstimate }, () => {
+                this.doComputation(this.state.grid, this.state.squidsGotten);
+            });
+        }
     }
 
-    async incrementKills() {
+    incrementKills() {
         let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
-        if (!this.state.turboBlurboMode && numericValue === 3)
-            return;
-        this.copyToUndoBuffer();
         let grid = this.state.grid;
-        numericValue++;
-        if (numericValue === 4) {
-            // TODO: Think very carefully about this timer splitting, and if and when it should happen.
-            const gameHistoryArguments = this.makeGameHistoryArguments();
-            this.splitTimer();
-            const success = await this.copyToHistory(gameHistoryArguments);
-            if (success) {
-                numericValue = 0;
-                grid = this.makeEmptyGrid();
-                // FIXME: Make us able to undo across completions.
-                this.setState({undoBuffer: [], cursorBelief: [0, 7]});
-            } else {
-                numericValue = 3;
-            }
+        if (numericValue < 3) {
+            this.copyToUndoBuffer();
+            numericValue++;
+            this.setState({ squidsGotten: '' + numericValue });
+            this.doComputation(grid, '' + numericValue);
         }
-        sendSpywareEvent({kind: 'incrementKills', oldGrid: this.state.grid, newGrid: grid, newNumericValue: numericValue});
-        this.setState({grid, squidsGotten: '' + numericValue});
-        this.doComputation(grid, '' + numericValue);
+        sendSpywareEvent({ kind: 'incrementKills', oldGrid: grid, newGrid: grid, newNumericValue: numericValue });
     }
 
     async copyToHistory(gameHistoryArguments) {
