@@ -85,6 +85,12 @@ fn make_mask(bits: &[u8]) -> u64 {
     result
 }
 
+pub struct GameState {
+    hits: Vec<u8>,
+    misses: Vec<u8>,
+    squids_gotten: i32,
+}
+
 pub struct PossibleBoards {
     boards: Vec<PossibleBoard>,
 }
@@ -135,19 +141,17 @@ impl PossibleBoards {
 
     pub fn do_computation(
         &self,
-        hits: &[u8],
-        misses: &[u8],
-        squids_gotten: i32,
+        state: &GameState,
         board_priors: &[f64],
     ) -> Option<([f64; 64], f64)> {
-        let hit_mask = make_mask(hits);
-        let miss_mask = make_mask(misses);
+        let hit_mask = make_mask(&state.hits);
+        let miss_mask = make_mask(&state.misses);
 
         let mut total_probability = 0.0;
         let mut probabilities = [0.0; 64];
 
         for (i, pb) in (&self.boards).iter().enumerate() {
-            if pb.check_compatible(hit_mask, miss_mask, squids_gotten) {
+            if pb.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
                 let board_prob = 1e-20 * pb.probability + board_priors[i];
                 for (bit_index, probability) in probabilities.iter_mut().enumerate() {
                     if (pb.squids & (1 << bit_index)) != 0 {
@@ -232,9 +236,7 @@ impl PossibleBoards {
     pub fn do_computation_from_game_history(
         &self,
         board_table: &[u32],
-        hits: &[u8],
-        misses: &[u8],
-        squids_gotten: i32,
+        state: &GameState,
         observed_boards: &[u32],
         prior_steps_from_previous_means: &[u32],
         prior_steps_from_previous_stddevs: &[f64],
@@ -245,7 +247,7 @@ impl PossibleBoards {
             prior_steps_from_previous_means,
             prior_steps_from_previous_stddevs,
         );
-        self.do_computation(hits, misses, squids_gotten, &board_priors)
+        self.do_computation(state, &board_priors)
     }
 
     pub fn disambiguate_final_board(
@@ -300,10 +302,15 @@ pub fn calculate_probabilities_without_sequence(
     misses: &[u8],
     squids_gotten: i32,
 ) -> Option<Vec<f64>> {
+    let state = GameState {
+        hits: hits.to_vec(),
+        misses: misses.to_vec(),
+        squids_gotten,
+    };
     let board_priors = vec![0.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
-        .do_computation(hits, misses, squids_gotten, &board_priors)?;
+        .do_computation(&state, &board_priors)?;
 
     let mut values = probabilities.to_vec();
 
@@ -329,14 +336,17 @@ pub fn calculate_probabilities_from_game_history(
         Some(v) => v,
         None => &fake_board_table,
     };
+    let state = GameState {
+        hits: hits.to_vec(),
+        misses: misses.to_vec(),
+        squids_gotten,
+    };
 
     let (probabilities, total_probability) = POSSIBLE_BOARDS
         .get_or_init(PossibleBoards::new)
         .do_computation_from_game_history(
             board_table,
-            hits,
-            misses,
-            squids_gotten,
+            &state,
             observed_boards,
             prior_steps_from_previous_means,
             prior_steps_from_previous_stddevs,
@@ -381,11 +391,17 @@ pub fn set_board_table(board_table: &[u32]) {
 
 #[cfg(test)]
 mod tests {
+    use crate::GameState;
     use crate::PossibleBoards;
 
     #[test]
     fn test() {
+        let state = GameState {
+            hits: vec![],
+            misses: vec![],
+            squids_gotten: -1,
+        };
         let priors = vec![0.0; 604584];
-        PossibleBoards::new().do_computation(&[], &[], -1, &priors).unwrap();
+        PossibleBoards::new().do_computation(&state, &priors).unwrap();
     }
 }
