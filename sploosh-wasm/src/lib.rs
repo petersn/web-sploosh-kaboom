@@ -392,6 +392,7 @@ mod tests {
 
     #[test]
     fn test() {
-        PossibleBoards::new().do_computation(&[], &[], -1, &[], &[]).unwrap();
+        let priors = vec![1.0; 604584];
+        PossibleBoards::new().do_computation(&[], &[], -1, &priors).unwrap();
     }
 }
