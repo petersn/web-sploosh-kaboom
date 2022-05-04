@@ -14,7 +14,10 @@ const VERSION_STRING = 'v0.0.21';
 var globalDB = null;
 const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
 indexedDBreq.onerror = function(event) {
-    alert('Failed to access IndexedDB.');
+    alert('Could not access IndexedDB. This is usually due to using Private ' +
+          'Browsing in Firefox. The application should still work, but the ' +
+          'tables for Turbo Blurbo Mode cannot be saved and must be ' +
+          'redownloaded every time you initialize it.');
 };
 // Known issue: There's basically a race condition here in that I don't
 // wait for this onsuccess to potentially start calling dbRead.
