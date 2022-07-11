@@ -1233,11 +1233,11 @@ class MainMap extends React.Component {
                 */}
             </div>
             <br/>
+            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
+            <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
             {
                 this.state.turboBlurboMode &&
                 <>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
-                    <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.copyToHistory(); }}>Copy to History (h)</button>
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
                 </>
