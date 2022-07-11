@@ -916,7 +916,7 @@ class MainMap extends React.Component {
             grid, hits, misses, numericSquidsGotten,
             oldValid: this.state.valid,
             didWeConcludeTheSituationWasValid: valid,
-            probabilities: Array.from(probabilities),
+            probabilities: Array.from(probabilities ?? []),
             turboBlurboMode: this.state.turboBlurboMode,
             turboBlurboTiming: this.state.turboBlurboTiming,
             gameHistoryArguments: (gameHistoryArguments === null) ? [] : gameHistoryArguments.map(a => Array.from(a)),
@@ -1049,8 +1049,10 @@ class MainMap extends React.Component {
     }
 
     async incrementKills() {
-        this.copyToUndoBuffer();
         let numericValue = this.state.squidsGotten === 'unknown' ? 0 : Number(this.state.squidsGotten);
+        if (!this.state.turboBlurboMode && numericValue === 3)
+            return;
+        this.copyToUndoBuffer();
         let grid = this.state.grid;
         numericValue++;
         if (numericValue === 4) {
@@ -1073,6 +1075,8 @@ class MainMap extends React.Component {
     }
 
     async copyToHistory(gameHistoryArguments) {
+        if (!this.state.turboBlurboMode)
+            return;
         const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
         if (gameHistoryArguments === undefined)
             gameHistoryArguments = this.makeGameHistoryArguments();
