@@ -686,8 +686,8 @@ class MainMap extends React.Component {
             squidsGotten: 'unknown',
             undoBuffer: [],
             probs,
-            best: [3, 3],
-            cursorBelief: [3, 3],
+            best: [3, 4],
+            cursorBelief: [0, 7],
             valid: true,
             observationProb: 1.0,
             lastComputationTime: -1,
@@ -1064,7 +1064,7 @@ class MainMap extends React.Component {
                 numericValue = 0;
                 grid = this.makeEmptyGrid();
                 // FIXME: Make us able to undo across completions.
-                this.setState({undoBuffer: [], cursorBelief: [3, 3]});
+                this.setState({undoBuffer: [], cursorBelief: [0, 7]});
             } else {
                 numericValue = 3;
             }
