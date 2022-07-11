@@ -754,10 +754,6 @@ class MainMap extends React.Component {
             this.boardTable = new Uint32Array(buf);
             // Warning: Do I need to await wasm here first?
             console.log('Board table length:', this.boardTable.length);
-            // Make sure every value is in range.
-            for (const v of this.boardTable)
-                if (v > 604583)
-                    alert('BUG BUG BUG: Bad value in board table: ' + v);
             set_board_table(this.boardTable);
             this.setState({turboBlurboMode: true, squidsGotten: '0', mode: 'calculator'});
         });
