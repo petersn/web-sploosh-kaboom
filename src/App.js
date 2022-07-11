@@ -1340,8 +1340,13 @@ function globalShortcutsHandler(evt) {
 
     // Add z or y for German keyboard support.
     var event_key = evt.key.toLowerCase();
-    if (event_key === 'z' && evt.ctrlKey)
-        globalMap.undoLastMarking();
+    if (event_key === 'z' && evt.ctrlKey && globalMap !== null) {
+        // Prevent modifying an input when undoing.
+        if (evt.target?.tagName !== "INPUT") {
+            evt.preventDefault();
+            globalMap.undoLastMarking();
+        }
+    }
     else if ((event_key === 'z' || event_key === 'y')  && globalMap !== null)
         globalMap.reportMiss();
     if ((event_key === 'x') && globalMap !== null)
