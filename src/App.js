@@ -539,7 +539,6 @@ class BoardTimer extends React.Component {
         super();
         globalBoardTimer = this;
         this.state = {
-            previouslyAccumulatedSeconds: 0.0,
             //previouslyAccumulatedRupeeSeconds: 0.0,
             timerStartMS: 0.0,
             timerRunning: false,
@@ -550,13 +549,10 @@ class BoardTimer extends React.Component {
         };
     }
 
-    toggleRunning() {
-        const now = performance.now();
-        const elapsed = 1e-3 * (now - this.state.timerStartMS);
-        sendSpywareEvent({kind: 'timer_toggleRunning', elapsed, oldState: this.state});
-        if (this.state.timerRunning)
-            this.setState({previouslyAccumulatedSeconds: this.state.previouslyAccumulatedSeconds + elapsed});
-        this.setState({timerRunning: !this.state.timerRunning, timerStartMS: now});
+    startRunning() {
+        timerStartMS = performance.now();
+        sendSpywareEvent({kind: 'timer_startRunning', oldState: this.state});
+        this.setState({timerRunning: true, timerStartMS});
     }
 
     adjustRewards(delta) {
@@ -584,19 +580,16 @@ class BoardTimer extends React.Component {
     resetTimer() {
         sendSpywareEvent({kind: 'timer_resetTimer', oldState: this.state});
         this.setState({
-            previouslyAccumulatedSeconds: 0.0,
-            timerStartMS: performance.now(),
             timerRunning: false,
         });
     }
 
     getSecondsElapsed() {
-        let total = this.state.previouslyAccumulatedSeconds;
         if (this.state.timerRunning) {
             const now = performance.now();
-            total += 1e-3 * (now - this.state.timerStartMS);
+            return 1e-3 * (now - this.state.timerStartMS);
         }
-        return total;
+        return 0;
     }
 
     guessStepsElapsedFromTime(timeDeltaSeconds) {
@@ -1034,7 +1027,7 @@ class MainMap extends React.Component {
         // If the timer hasn't been started yet, the purpose of this function
         // call was to start it, not to actually split.
         if (elapsed === 0.0 && !boardTimer.state.invalidated) {
-            boardTimer.toggleRunning();
+            boardTimer.startRunning();
             return;
         }
         const timerStepEstimate = boardTimer.state.invalidated ? null : boardTimer.guessStepsElapsedFromTime(elapsed);
@@ -1042,7 +1035,6 @@ class MainMap extends React.Component {
         console.log('Timer step estimate:', timerStepEstimate);
         sendSpywareEvent({kind: 'splitTimer', invalidated: boardTimer.state.invalidated, timerStepEstimate: timerStepEstimate, elapsed});
         boardTimer.setState({
-            previouslyAccumulatedSeconds: 0.0,
             timerStartMS: performance.now(),
             // After the first split we're no longer loading the room.
             includesLoadingTheRoom: false,
@@ -1196,7 +1188,6 @@ class MainMap extends React.Component {
                             <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
                             <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
                             <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
-                            <span>&nbsp;Pause/Resume Timer&nbsp;</span><span>&nbsp;s&nbsp;</span>
                         </>}
                     </div>
                     {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
@@ -1364,8 +1355,6 @@ function globalShortcutsHandler(evt) {
     if (event_key === 'h' && globalMap !== null)
         globalMap.copyToHistory();
 
-    if (event_key === 's' && globalBoardTimer !== null)
-        globalBoardTimer.toggleRunning();
     if (event_key === ',' && globalBoardTimer !== null)
         globalBoardTimer.adjustRewards(+1);
     if (event_key === '<' && globalBoardTimer !== null)
