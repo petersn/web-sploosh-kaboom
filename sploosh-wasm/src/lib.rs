@@ -185,7 +185,7 @@ impl PossibleBoards {
         }
         fn scan_from(
             depth: usize, starting_index: usize, prob: f64,
-            mut board_priors: &mut Vec<f64>, board_table: &[u32],
+            board_priors: &mut Vec<f64>, board_table: &[u32],
             observed_boards: &[u32],
             prior_steps_from_previous_means: &[u32],
             prior_steps_from_previous_stddevs: &[f64],
@@ -210,10 +210,10 @@ impl PossibleBoards {
                         let adjustment = gaussian_pdf(offset as f64, sigma);
                         scan_from(
                             depth + 1, i, prob * adjustment,
-                            &mut board_priors, &board_table,
-                            &observed_boards,
-                            &prior_steps_from_previous_means,
-                            &prior_steps_from_previous_stddevs,
+                            board_priors, board_table,
+                            observed_boards,
+                            prior_steps_from_previous_means,
+                            prior_steps_from_previous_stddevs,
                         );
                     }
                 }
@@ -221,10 +221,10 @@ impl PossibleBoards {
         }
         scan_from(
             0, 0, 1.0,
-            &mut board_priors, &board_table,
-            &observed_boards,
-            &prior_steps_from_previous_means,
-            &prior_steps_from_previous_stddevs,
+            &mut board_priors, board_table,
+            observed_boards,
+            prior_steps_from_previous_means,
+            prior_steps_from_previous_stddevs,
         );
         board_priors
     }
@@ -311,7 +311,7 @@ pub fn calculate_probabilities_with_board_constraints(
         .get_or_init(PossibleBoards::new)
         .do_computation(hits, misses, squids_gotten, &board_priors)?;
 
-    let mut values = probabilities.iter().copied().collect::<Vec<_>>();
+    let mut values = probabilities.to_vec();
 
     // We sneak in the total probability at the end. With the way this value
     // is calculated, it ranges from 0 to about 1e-20. We scale it up here, to
@@ -330,7 +330,7 @@ pub fn calculate_probabilities_from_game_history(
     prior_steps_from_previous_means: &[u32],
     prior_steps_from_previous_stddevs: &[f64],
 ) -> Option<Vec<f64>> {
-    let fake_board_table = vec!{};
+    let fake_board_table = vec![];
     let board_table = match BOARD_TABLE.get() {
         Some(v) => v,
         None => &fake_board_table,
@@ -348,7 +348,7 @@ pub fn calculate_probabilities_from_game_history(
             prior_steps_from_previous_stddevs,
         )?;
 
-    let mut values = probabilities.iter().copied().collect::<Vec<_>>();
+    let mut values = probabilities.to_vec();
 
     // We sneak in the total probability at the end.
     values.push(total_probability);
@@ -363,7 +363,7 @@ pub fn disambiguate_final_board(
     prior_steps_from_previous_means: &[u32],
     prior_steps_from_previous_stddevs: &[f64],
 ) -> Option<u32> {
-    let fake_board_table = vec!{};
+    let fake_board_table = vec![];
     let board_table = match BOARD_TABLE.get() {
         Some(v) => v,
         None => &fake_board_table,
@@ -382,7 +382,7 @@ pub fn disambiguate_final_board(
 
 #[wasm_bindgen]
 pub fn set_board_table(board_table: &[u32]) {
-    BOARD_TABLE.set(board_table.iter().copied().collect::<Vec<_>>()).unwrap();
+    BOARD_TABLE.set(board_table.to_vec()).unwrap();
 }
 
 #[cfg(test)]
