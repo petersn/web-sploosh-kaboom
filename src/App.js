@@ -503,6 +503,15 @@ class BoardTimer extends React.Component {
             includedRewardsGotten: 0,
             invalidated: false,
         };
+        this.shortcutsHandler = this.shortcutsHandler.bind(this);
+    }
+
+    componentDidMount() {
+        document.addEventListener('keydown', this.shortcutsHandler);
+    }
+
+    componentWillUnmount() {
+        document.removeEventListener('keydown', this.shortcutsHandler);
     }
 
     startRunning() {
@@ -548,6 +557,24 @@ class BoardTimer extends React.Component {
             prediction += -940 + Number(this.props.roomEnteredOffset);
         prediction += this.state.includedRewardsGotten * 760;
         return Math.round(prediction);
+    }
+
+    shortcutsHandler(evt) {
+        // Check if the target is an input field that should take precedence over shortcuts.
+        if (evt.target?.getAttribute?.('data-stop-shortcuts'))
+            return;
+
+        const event_key = evt.key.toLowerCase();
+        if (event_key === ',')
+            this.adjustRewards(+1);
+        if (event_key === '<')
+            this.adjustRewards(-1);
+        if (event_key === 'm')
+            this.toggleLoadingTheRoom();
+        if (event_key === ';')
+            this.toggleInvalidated();
+        if (event_key === ':')
+            this.resetTimer();
     }
 
     render() {
@@ -1258,17 +1285,6 @@ function globalShortcutsHandler(evt) {
         globalMap.splitTimer();
         evt.preventDefault();
     }
-
-    if (event_key === ',' && globalBoardTimer !== null)
-        globalBoardTimer.adjustRewards(+1);
-    if (event_key === '<' && globalBoardTimer !== null)
-        globalBoardTimer.adjustRewards(-1);
-    if (event_key === 'm' && globalBoardTimer !== null)
-        globalBoardTimer.toggleLoadingTheRoom();
-    if (event_key === ';' && globalBoardTimer !== null)
-        globalBoardTimer.toggleInvalidated();
-    if (event_key === ':' && globalBoardTimer !== null)
-        globalBoardTimer.resetTimer();
 }
 
 document.addEventListener('keydown', globalShortcutsHandler);
