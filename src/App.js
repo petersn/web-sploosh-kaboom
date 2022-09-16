@@ -620,10 +620,16 @@ class MainMap extends React.Component {
         super();
         this.state = this.makeEmptyState();
         globalMap = this;
+        this.shortcutsHandler = this.shortcutsHandler.bind(this);
     }
 
     componentDidMount() {
+        document.addEventListener('keydown', this.shortcutsHandler);
         this.doComputation(this.state.grid, this.state.squidsGotten);
+    }
+
+    componentWillUnmount() {
+        document.removeEventListener('keydown', this.shortcutsHandler);
     }
 
     makeEmptyGrid() {
@@ -1075,6 +1081,32 @@ class MainMap extends React.Component {
         drawingBoards[drawingBoards.length - 1].clearBoard();
     }
 
+    shortcutsHandler(evt) {
+        // Check if the target is an input field that should take precedence over shortcuts.
+        if (evt.target?.getAttribute?.('data-stop-shortcuts'))
+            return;
+
+        const event_key = evt.key.toLowerCase();
+        if (event_key === 'z' && evt.ctrlKey) {
+            // Prevent modifying an input when undoing.
+            if (evt.target?.tagName !== "INPUT") {
+                evt.preventDefault();
+                this.undoLastMarking();
+            }
+        }
+        // Add z or y for German keyboard support.
+        else if (event_key === 'z' || event_key === 'y')
+            this.reportMiss();
+        if (event_key === 'x')
+            this.reportHit();
+        if (event_key === 'c')
+            this.incrementKills();
+        if (event_key === ' ') {
+            this.splitTimer();
+            evt.preventDefault();
+        }
+    }
+
     renderActualMap() {
         return <div style={{justifySelf: 'center'}}>
             {naturalsUpTo(8).map(
@@ -1260,34 +1292,6 @@ class MainMap extends React.Component {
         </div>;
     }
 }
-
-function globalShortcutsHandler(evt) {
-    // Check if the target is an input field that should take precedence over shortcuts.
-    if (evt.target && 'getAttribute' in evt.target && evt.target.getAttribute('data-stop-shortcuts'))
-        return;
-
-    // Add z or y for German keyboard support.
-    var event_key = evt.key.toLowerCase();
-    if (event_key === 'z' && evt.ctrlKey && globalMap !== null) {
-        // Prevent modifying an input when undoing.
-        if (evt.target?.tagName !== "INPUT") {
-            evt.preventDefault();
-            globalMap.undoLastMarking();
-        }
-    }
-    else if ((event_key === 'z' || event_key === 'y')  && globalMap !== null)
-        globalMap.reportMiss();
-    if ((event_key === 'x') && globalMap !== null)
-        globalMap.reportHit();
-    if (event_key === 'c' && globalMap !== null)
-        globalMap.incrementKills();
-    if (event_key === ' ' && globalMap !== null) {
-        globalMap.splitTimer();
-        evt.preventDefault();
-    }
-}
-
-document.addEventListener('keydown', globalShortcutsHandler);
 
 class App extends React.Component {
     render() {
