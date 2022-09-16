@@ -476,16 +476,6 @@ class LayoutDrawingBoard extends React.Component {
     }
 }
 
-var globalBoardTimer = null;
-
-setInterval(
-    () => {
-        if (globalBoardTimer !== null)
-            globalBoardTimer.forceUpdate();
-    },
-    69,
-);
-
 function renderYesNo(bool) {
     return bool ?
         <span style={{color: 'green', textShadow: '0px 0px 2px white'}}>YES</span> :
@@ -495,7 +485,6 @@ function renderYesNo(bool) {
 class BoardTimer extends React.Component {
     constructor() {
         super();
-        globalBoardTimer = this;
         this.state = {
             timerStartMS: 0.0,
             timerRunning: false,
@@ -508,10 +497,12 @@ class BoardTimer extends React.Component {
 
     componentDidMount() {
         document.addEventListener('keydown', this.shortcutsHandler);
+        this.timerID = setInterval(() => this.forceUpdate(), 66);
     }
 
     componentWillUnmount() {
         document.removeEventListener('keydown', this.shortcutsHandler);
+        clearInterval(this.timerID);
     }
 
     startRunning() {
