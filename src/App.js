@@ -890,6 +890,7 @@ class MainMap extends React.Component {
         this.copyToUndoBuffer();
 
         if (this.state.mode === 'calculator') {
+            const oldValue = gridValue;
             switch (gridValue) {
                 case 'MISS':
                     gridValue = 'HIT';
@@ -902,6 +903,20 @@ class MainMap extends React.Component {
                     break;
             }
             grid[[x, y]] = gridValue;
+            // Manage the third kill so that users don't have to think about it.
+            // First, check that the number of hits changed.
+            if (gridValue === 'HIT' || oldValue === 'HIT') {
+                // Don't change kills from unknown, even if we are certain of the value.
+                if (squidsGotten !== 'unknown') {
+                    // Only change squid count when the user changes from 8 to 9
+                    // or 9 to 8 for the most consistent experience. (This works
+                    // in combination with the check that hits changed.)
+                    const {hits} = this.getGridStatistics(grid, squidsGotten);
+                    squidsGotten = hits.length === 9 ? '3'
+                                 : hits.length === 8 && oldValue === 'HIT' ? '2'
+                                 : squidsGotten;
+                }
+            }
         } else {
             // Determine from the random layout.
             if (gridValue !== null)
@@ -928,9 +943,8 @@ class MainMap extends React.Component {
                         killed = false;
                 squidsGotten += killed;
             }
-            this.setState({ squidsGotten });
         }
-        this.setState({grid, cursorBelief: [x, y]});
+        this.setState({ grid, cursorBelief: [x, y], squidsGotten });
         this.doComputation(grid, squidsGotten);
     }
 
@@ -968,11 +982,6 @@ class MainMap extends React.Component {
         if (this.state.best !== null && this.state.grid[this.state.best] === null) {
             sendSpywareEvent({kind: 'reportHit', best: this.state.best, oldGrid: this.state.grid});
             this.onClick(...this.state.best, true);
-            const {hits, numericSquidsGotten} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
-            // This prevents users from having to input the third kill.
-            if (hits.length === 9 && numericSquidsGotten === 2) {
-                this.incrementKills();
-            }
         }
     }
 
