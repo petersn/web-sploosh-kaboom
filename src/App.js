@@ -555,17 +555,18 @@ class BoardTimer extends React.Component {
         if (evt.target?.getAttribute?.('data-stop-shortcuts'))
             return;
 
-        const event_key = evt.key.toLowerCase();
-        if (event_key === ',')
-            this.adjustRewards(+1);
-        if (event_key === '<')
-            this.adjustRewards(-1);
-        if (event_key === 'm')
+        if (evt.code === 'Comma')
+            if (evt.shiftKey)
+                this.adjustRewards(-1);
+            else
+                this.adjustRewards(+1);
+        if (evt.code === 'KeyM')
             this.toggleLoadingTheRoom();
-        if (event_key === ';')
-            this.toggleInvalidated();
-        if (event_key === ':')
-            this.resetTimer();
+        if (evt.code === 'Semicolon')
+            if (evt.shiftKey)
+                this.resetTimer();
+            else
+                this.toggleInvalidated();
     }
 
     render() {
@@ -1086,22 +1087,20 @@ class MainMap extends React.Component {
         if (evt.target?.getAttribute?.('data-stop-shortcuts'))
             return;
 
-        const event_key = evt.key.toLowerCase();
-        if (event_key === 'z' && evt.ctrlKey) {
+        if (evt.key.toLowerCase() === 'z' && evt.ctrlKey) {
             // Prevent modifying an input when undoing.
             if (evt.target?.tagName !== "INPUT") {
                 evt.preventDefault();
                 this.undoLastMarking();
             }
         }
-        // Add z or y for German keyboard support.
-        else if (event_key === 'z' || event_key === 'y')
+        else if (evt.code === 'KeyZ')
             this.reportMiss();
-        if (event_key === 'x')
+        if (evt.code === 'KeyX')
             this.reportHit();
-        if (event_key === 'c')
+        if (evt.code === 'KeyC')
             this.incrementKills();
-        if (event_key === ' ') {
+        if (evt.code === 'Space') {
             this.splitTimer();
             evt.preventDefault();
         }
@@ -1161,10 +1160,10 @@ class MainMap extends React.Component {
                             <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
                             <span>&nbsp;Start/Split Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
                             <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
-                            <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;&lt;&nbsp;</span>
+                            <span>&nbsp;Remove Reward&nbsp;</span><span>&nbsp;Shift+,&nbsp;</span>
                             <span>&nbsp;Toggle Room Entered&nbsp;</span><span>&nbsp;m&nbsp;</span>
                             <span>&nbsp;Invalidate Timer&nbsp;</span><span>&nbsp;;&nbsp;</span>
-                            <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;:&nbsp;</span>
+                            <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;Shift+;&nbsp;</span>
                         </>}
                     </div>
                     {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
