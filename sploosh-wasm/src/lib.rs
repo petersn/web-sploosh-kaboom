@@ -1,4 +1,7 @@
 use once_cell::sync::OnceCell;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 
 struct PossibleBoard {
@@ -84,6 +87,7 @@ pub struct GameState {
     squids_gotten: i32,
 }
 
+#[derive(PartialEq, Clone)]
 pub struct History {
     observed_boards: Vec<u32>,
     means: Vec<u32>,
@@ -92,6 +96,7 @@ pub struct History {
 
 pub struct PossibleBoards {
     boards: Vec<PossibleBoard>,
+    priors_cache: RefCell<VecDeque<(History, Vec<f64>)>>,
 }
 
 impl PossibleBoards {
@@ -137,13 +142,14 @@ impl PossibleBoards {
 
         Self {
             boards: possible_boards,
+            priors_cache: RefCell::new(VecDeque::with_capacity(16)),
         }
     }
 
     pub fn do_computation(
         &self,
         state: &GameState,
-        board_priors: &[f64],
+        board_priors: Option<&[f64]>,
     ) -> Option<([f64; 64], f64)> {
         let hit_mask = make_mask(&state.hits);
         let miss_mask = make_mask(&state.misses);
@@ -151,20 +157,41 @@ impl PossibleBoards {
         let mut total_probability = 0.0;
         let mut probabilities = [0.0; 64];
 
-        for (i, pb) in (&self.boards).iter().enumerate() {
-            if pb.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
-                let board_prob = 1e-20 * pb.probability + board_priors[i];
-                for (bit_index, probability) in probabilities.iter_mut().enumerate() {
-                    if (pb.squids & (1 << bit_index)) != 0 {
-                        *probability += board_prob;
+        // If a list of priors is given, use them to try to create a heatmap.
+        // Otherwise, use the general probabilities expected based on the board
+        // generation algorithm.
+        if let Some(board_priors) = board_priors {
+            for (board, &prior) in self.boards.iter().zip(board_priors) {
+                if prior > 0.0 &&
+                    board.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
+                    for (bit_index, probability) in probabilities.iter_mut().enumerate() {
+                        if (board.squids & (1 << bit_index)) != 0 {
+                            *probability += prior;
+                        }
                     }
+                    total_probability += prior;
                 }
-                total_probability += board_prob;
             }
-        }
-
-        if total_probability == 0.0 {
-            return None;
+            // If the priors don't include the possibility of this state,
+            // fall back to the general probabilities.
+            if total_probability == 0.0 {
+                return self.do_computation(state, None);
+            }
+        } else {
+            for board in self.boards.iter() {
+                if board.check_compatible(hit_mask, miss_mask, state.squids_gotten) {
+                    for (bit_index, probability) in probabilities.iter_mut().enumerate() {
+                        if (board.squids & (1 << bit_index)) != 0 {
+                            *probability += board.probability;
+                        }
+                    }
+                    total_probability += board.probability;
+                }
+            }
+            // If no boards have matched, this state is actually impossible.
+            if total_probability == 0.0 {
+                return None;
+            }
         }
 
         // Renormalize the distribution.
@@ -175,7 +202,7 @@ impl PossibleBoards {
         Some((probabilities, total_probability))
     }
 
-    pub fn compute_board_priors(
+    fn compute_board_priors(
         &self,
         board_table: &[u32],
         history: &History,
@@ -226,17 +253,49 @@ impl PossibleBoards {
         board_priors
     }
 
+    pub fn get_board_priors(
+        &self,
+        board_table: &[u32],
+        history: &History,
+    ) -> impl std::ops::Deref<Target = Vec<f64>> + '_ {
+        let match_index = self.priors_cache.borrow().iter().position(
+            |(cached_history, _)| *history == *cached_history
+        );
+        match match_index {
+            Some(i) => {
+                // Move the matched entry to mark most recently used.
+                if i != 0 {
+                    let mut priors_cache = self.priors_cache.borrow_mut();
+                    let entry = priors_cache.remove(i).unwrap();
+                    priors_cache.push_front(entry);
+                }
+            },
+            None => {
+                let mut priors_cache = self.priors_cache.borrow_mut();
+                // Remove the least recently used entry if we're at capacity.
+                if priors_cache.len() == priors_cache.capacity() {
+                    priors_cache.pop_back();
+                }
+
+                let board_priors = self.compute_board_priors(
+                    board_table,
+                    history,
+                );
+                priors_cache.push_front((history.clone(), board_priors));
+            }
+        };
+        // Expose just the priors that are of interest without copying them.
+        std::cell::Ref::map(self.priors_cache.borrow(), |c| &c.front().unwrap().1)
+    }
+
     pub fn do_computation_from_game_history(
         &self,
         board_table: &[u32],
         state: &GameState,
         history: &History
     ) -> Option<([f64; 64], f64)> {
-        let board_priors: Vec<f64> = self.compute_board_priors(
-            board_table,
-            history,
-        );
-        self.do_computation(state, &board_priors)
+        let board_priors = self.get_board_priors(board_table, history);
+        self.do_computation(state, Some(&board_priors))
     }
 
     pub fn disambiguate_final_board(
@@ -245,38 +304,41 @@ impl PossibleBoards {
         hits: &[u8],
         history: &History,
     ) -> Option<u32> {
-        let mut board_priors: Vec<f64> = self.compute_board_priors(
-            board_table,
-            history,
-        );
-
+        let mut match_indices = Vec::new();
         let hit_mask = make_mask(hits);
-        for (i, pb) in (&self.boards).iter().enumerate() {
-            if ! pb.check_compatible(hit_mask, 0, 3) {
-                board_priors[i] = 0.0;
+        for (i, board) in self.boards.iter().enumerate() {
+            if board.check_compatible(hit_mask, 0, 3) {
+                match_indices.push(i);
             }
         }
 
-        // Normalize the prior.
-        let mut total = 1e-20;
-        for p in &board_priors {
-            total += *p;
-        }
-        for p in &mut board_priors {
-            *p /= total;
-        }
-
-        for (i, p) in board_priors.iter().enumerate() {
-            if *p > 0.9 {
-                return Some(i as u32);
+        let best_match = match match_indices.len() {
+            0 => None,
+            // If there is only one possible match, it must be correct,
+            // even if its prior probability is 0 based on the history.
+            1 => Some(&match_indices[0]),
+            // Return one of the possible boards based on confidence.
+            _ => {
+                let board_priors = self.get_board_priors(board_table, history);
+                let total = match_indices.iter()
+                                         .map(|&i| board_priors[i])
+                                         .sum::<f64>();
+                // We need a match with a positive prior to disambiguate.
+                if total == 0.0 {
+                    None
+                } else {
+                    // Require 90% confidence in a match to return it.
+                    match_indices.iter().find(|&&board_index|
+                        board_priors[board_index] / total > 0.9
+                    )
+                }
             }
-        }
-
-        None
+        };
+        best_match.map(|&m| std::convert::TryInto::try_into(m).unwrap())
     }
 }
 
-static POSSIBLE_BOARDS: OnceCell<PossibleBoards> = OnceCell::new();
+static POSSIBLE_BOARDS: OnceCell<Mutex<PossibleBoards>> = OnceCell::new();
 static BOARD_TABLE: OnceCell<Vec<u32>> = OnceCell::new();
 
 // Calculates the probabilities for each cell based on the hits, misses and the
@@ -292,17 +354,16 @@ pub fn calculate_probabilities_without_sequence(
         misses: misses.to_vec(),
         squids_gotten,
     };
-    let board_priors = vec![0.0; 604584];
     let (probabilities, total_probability) = POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
-        .do_computation(&state, &board_priors)?;
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
+        .do_computation(&state, None)?;
 
     let mut values = probabilities.to_vec();
 
-    // We sneak in the total probability at the end. With the way this value
-    // is calculated, it ranges from 0 to about 1e-20. We scale it up here, to
-    // range from 0 to about 1.
-    values.push(total_probability * 1e20);
+    // We sneak in the total probability at the end.
+    values.push(total_probability);
 
     Some(values)
 }
@@ -333,7 +394,9 @@ pub fn calculate_probabilities_from_game_history(
     };
 
     let (probabilities, total_probability) = POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
         .do_computation_from_game_history(
             board_table,
             &state,
@@ -367,7 +430,9 @@ pub fn disambiguate_final_board(
     };
 
     POSSIBLE_BOARDS
-        .get_or_init(PossibleBoards::new)
+        .get_or_init(|| Mutex::new(PossibleBoards::new()))
+        .lock()
+        .unwrap()
         .disambiguate_final_board(
             board_table,
             hits,
@@ -392,7 +457,6 @@ mod tests {
             misses: vec![],
             squids_gotten: -1,
         };
-        let priors = vec![0.0; 604584];
-        PossibleBoards::new().do_computation(&state, &priors).unwrap();
+        PossibleBoards::new().do_computation(&state, None).unwrap();
     }
 }
