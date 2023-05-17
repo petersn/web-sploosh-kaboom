@@ -16,7 +16,7 @@ const indexedDBreq = window.indexedDB.open('splooshkaboom', 1);
 indexedDBreq.onerror = function(event) {
     alert('Could not access IndexedDB. This is usually due to using Private ' +
           'Browsing in Firefox. The application should still work, but the ' +
-          'tables for Turbo Blurbo Mode cannot be saved and must be ' +
+          'tables for Sequence-Aware Mode cannot be saved and must be ' +
           'redownloaded every time you initialize it.');
 };
 // Known issue: There's basically a race condition here in that I don't
@@ -652,8 +652,8 @@ class MainMap extends React.Component {
             observationProb: 1.0,
             lastComputationTime: -1,
 
-            turboBlurboMode: false,
-            turboBlurboTiming: false,
+            sequenceAware: false,
+            usingTimer: false,
             showKeyShortcuts: false,
             spywareMode: false,
 
@@ -696,11 +696,11 @@ class MainMap extends React.Component {
         this.setState(defaultConfigurationParams);
     }
 
-    async initializeTurboBlurboMode(bigTable) {
-        if (this.state.turboBlurboMode !== false)
+    async loadSequenceTable(bigTable) {
+        if (this.state.sequenceAware !== false)
             return;
         this.bigTable = bigTable;
-        this.setState({turboBlurboMode: 'initializing'});
+        this.setState({ sequenceAware: 'initializing' });
         this.boardIndices = await makeBoardIndicesTable();
         this.boardIndexToLayoutString = new Array(Object.keys(this.boardIndices).length);
         for (const key of Object.keys(this.boardIndices))
@@ -712,7 +712,7 @@ class MainMap extends React.Component {
             // Warning: Do I need to await wasm here first?
             console.log('Board table length:', this.boardTable.length);
             set_board_table(this.boardTable);
-            this.setState({turboBlurboMode: true, squidsGotten: '0', mode: 'calculator'});
+            this.setState({ sequenceAware: true, squidsGotten: '0', mode: 'calculator' });
         });
     }
 
@@ -766,7 +766,7 @@ class MainMap extends React.Component {
                 priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.firstBoardStepsThousandsStdDev));
             } else {
                 // If we're the last delta, and also not the first, then possibly use our time delta.
-                if (index === null && this.state.timerStepEstimate !== null && this.state.turboBlurboTiming) {
+                if (index === null && this.state.timerStepEstimate !== null && this.state.usingTimer) {
                     // Because the timerStepEstimate can be negative I have to avoid underflow.
                     priorStepsFromPreviousMeans.push(Math.max(0, this.state.timerStepEstimate));
                     priorStepsFromPreviousStdDevs.push(1000.0 * Number(this.state.timedBoardStepsThousandsStdDev));
@@ -811,7 +811,7 @@ class MainMap extends React.Component {
         await wasm;
         let probabilities;
         let gameHistoryArguments = null;
-        if (this.state.turboBlurboMode) {
+        if (this.state.sequenceAware) {
             gameHistoryArguments = this.makeGameHistoryArguments();
             console.log('gameHistoryArguments:', gameHistoryArguments);
 
@@ -867,8 +867,8 @@ class MainMap extends React.Component {
             oldValid: this.state.valid,
             didWeConcludeTheSituationWasValid: valid,
             probabilities: Array.from(probabilities ?? []),
-            turboBlurboMode: this.state.turboBlurboMode,
-            turboBlurboTiming: this.state.turboBlurboTiming,
+            sequenceAware: this.state.sequenceAware,
+            usingTimer: this.state.usingTimer,
             gameHistoryArguments: (gameHistoryArguments === null) ? [] : gameHistoryArguments.map(a => Array.from(a)),
             timerStepEstimate: this.state.timerStepEstimate,
             computationTime: (t1 - t0) / 1000,
@@ -955,8 +955,8 @@ class MainMap extends React.Component {
         const newState = {};
         for (const name of ['squidLayout', 'grid', 'squidsGotten', 'undoBuffer', 'cursorBelief'])
             newState[name] = templateState[name];
-        // The squidsGotten value of 'unknown' is banned in turbo blurbo mode.
-        if (this.state.turboBlurboMode)
+        // The squidsGotten value of 'unknown' is banned in sequence-aware mode.
+        if (this.state.sequenceAware)
             newState.squidsGotten = '0';
         this.setState(newState);
         this.doComputation(newState.grid, newState.squidsGotten);
@@ -1048,7 +1048,7 @@ class MainMap extends React.Component {
     }
 
     async copyToHistory(gameHistoryArguments) {
-        if (!this.state.turboBlurboMode)
+        if (!this.state.sequenceAware)
             return;
         const {hits} = this.getGridStatistics(this.state.grid, this.state.squidsGotten);
         if (gameHistoryArguments === undefined)
@@ -1164,12 +1164,12 @@ class MainMap extends React.Component {
                         <span><strong>&nbsp;Value&nbsp;</strong></span>
                         <span>&nbsp;Shots used:&nbsp;</span>
                         <span>&nbsp;{usedShots}&nbsp;</span>
-                        {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+                        {this.state.sequenceAware && this.state.usingTimer && <>
                             <BoardTimer ref={this.timerRef} roomEnteredOffset={this.state.roomEnteredOffset} timedTickIntercept={this.state.timedTickIntercept} timedTickRate={this.state.timedTickRate}/>
                             <span>&nbsp;Last steps:&nbsp;</span>
                             <span>&nbsp;{this.state.timerStepEstimate === null ? '-' : this.state.timerStepEstimate}&nbsp;</span>
                         </>}
-                        {this.state.turboBlurboMode && this.state.turboBlurboTiming && this.state.showKeyShortcuts && <>
+                        {this.state.sequenceAware && this.state.usingTimer && this.state.showKeyShortcuts && <>
                             <span><strong>&nbsp;Control&nbsp;</strong></span><span><strong>&nbsp;Shortcut&nbsp;</strong></span>
                             <span>&nbsp;Start/Split Timer&nbsp;</span><span>&nbsp;Space&nbsp;</span>
                             <span>&nbsp;Add Reward&nbsp;</span><span>&nbsp;,&nbsp;</span>
@@ -1178,7 +1178,7 @@ class MainMap extends React.Component {
                             <span>&nbsp;Reset Timer&nbsp;</span><span>&nbsp;Shift+;&nbsp;</span>
                         </>}
                     </div>
-                    {this.state.turboBlurboMode && this.state.turboBlurboTiming && <>
+                    {this.state.sequenceAware && this.state.usingTimer && <>
                         <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({showKeyShortcuts: !this.state.showKeyShortcuts}) }}>Toggle Show Shortcuts</button><br/>
                         <button style={{ fontSize: '120%', margin: '10px' }} onClick={() => { this.setState({spywareMode: !this.state.spywareMode}) }}>{
                             this.state.spywareMode ? <>Disable Spyware Mode</> : <>Enable Spyware Mode</>
@@ -1187,7 +1187,7 @@ class MainMap extends React.Component {
                 </div>
                 {this.renderActualMap()}
             </div>
-            {!this.state.valid && !this.state.turboBlurboMode && <div style={{ fontSize: '150%' }}>Invalid configuration! This is not possible.</div>}
+            {!this.state.valid && !this.state.sequenceAware && <div style={{ fontSize: '150%' }}>Invalid configuration! This is not possible.</div>}
             <br />
             <div style={{ fontSize: '150%' }}>
                 <span>Number of squids killed:</span>
@@ -1199,9 +1199,9 @@ class MainMap extends React.Component {
                         this.doComputation(this.state.grid, event.target.value);
                     }}
                 >
-                    {/* In turbo blurbo mode don't allow unknown, because it's just an accident waiting to happen for a runner. */}
+                    {/* In sequence-aware mode don't allow unknown, because it's just an accident waiting to happen for a runner. */}
                     {
-                        !this.state.turboBlurboMode &&
+                        !this.state.sequenceAware &&
                         <option value="unknown">Unknown</option>
                     }
                     <option value="0">0</option>
@@ -1214,7 +1214,7 @@ class MainMap extends React.Component {
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportMiss(); }}>Miss (z)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.reportHit(); }}>Hit (x)</button>
             {
-                this.state.turboBlurboMode &&
+                this.state.sequenceAware &&
                 <>
                     <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.shiftHistory(); }}>Shift History</button>
                 </>
@@ -1222,7 +1222,7 @@ class MainMap extends React.Component {
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.incrementKills(); }}>Increment Kills (c)</button>
             <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.clearField(); }}>Reset</button>
             {
-                !this.state.turboBlurboMode &&
+                !this.state.sequenceAware &&
                 <select
                     style={{ marginLeft: '20px', fontSize: '150%' }}
                     value={this.state.mode}
@@ -1233,18 +1233,18 @@ class MainMap extends React.Component {
                 </select>
             }
             {
-                this.state.turboBlurboMode &&
+                this.state.sequenceAware &&
                 <div className='timerModeSelection'>
                     <span style={{margin: '5px'}}>Timer mode:</span>
                     <input
                         type="checkbox"
-                        checked={this.state.turboBlurboTiming}
-                        onChange={(event) => this.setState({ turboBlurboTiming: !this.state.turboBlurboTiming })}
+                        checked={this.state.usingTimer}
+                        onChange={(event) => this.setState({ usingTimer: !this.state.usingTimer })}
                     />
                 </div>
             }
             <br />
-            {openingOptimizer && this.state.mode === 'calculator' && (!this.state.turboBlurboMode) && <>
+            {openingOptimizer && this.state.mode === 'calculator' && !this.state.sequenceAware && <>
                 <div style={{ fontSize: '120%', marginTop: '20px' }}>
                     Opening optimizer: Probability that this<br />pattern would get at least one hit: {
                         this.state.valid ? ((100 * Math.max(0, 1 - this.state.observationProb)).toFixed(2) + '%') : "Invalid"
@@ -1252,8 +1252,8 @@ class MainMap extends React.Component {
                 </div>
             </>}
             <br/>
-            {this.state.turboBlurboMode === 'initializing' && <div style={{ fontSize: '150%' }}>Downloading table...</div>}
-            {this.state.turboBlurboMode === true && <>
+            {this.state.sequenceAware === 'initializing' && <div style={{ fontSize: '150%' }}>Downloading table...</div>}
+            {this.state.sequenceAware === true && <>
                 <div>
                     {this.layoutDrawingBoardRefs.map((ref, i) =>
                         <LayoutDrawingBoard parent={this} ref={ref} key={i}/>
@@ -1288,14 +1288,14 @@ class MainMap extends React.Component {
                     })}
                 </div><br/>
                 <button style={{ fontSize: '150%', margin: '10px' }} onClick={() => { this.recomputePotentialMatches(); }}>Find Match Indices</button>
-                <div style={{ fontSize: '150%' }}>Turbo blurbo mode initialized.</div>
+                <div style={{ fontSize: '150%' }}>Sequence-aware mode initialized.</div>
             </>}
-            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.initializeTurboBlurboMode(false);
-            }}>Initialize Turbo Blurbo Mode</button><br/>
-            <button disabled={this.state.turboBlurboMode !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
-                this.initializeTurboBlurboMode(true);
-            }}>Initialize Turbo Blurbo Mode (big table)</button><br/>
+            <button disabled={this.state.sequenceAware !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                this.loadSequenceTable(false);
+            }}>Initialize Sequence-Aware Mode</button><br/>
+            <button disabled={this.state.sequenceAware !== false} style={{ fontSize: '150%', margin: '10px' }} onClick={() => {
+                this.loadSequenceTable(true);
+            }}>Initialize Sequence-Aware Mode (big table)</button><br/>
 
             {this.state.spywareMode && <><SpywareModeConfiguration /><br/></>}
 
