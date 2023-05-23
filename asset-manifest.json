@@ -1,22 +1,23 @@
 {
   "files": {
-    "main.css": "/web-sploosh-kaboom/static/css/main.7fb2b023.chunk.css",
-    "main.js": "/web-sploosh-kaboom/static/js/main.60c36ada.chunk.js",
-    "main.js.map": "/web-sploosh-kaboom/static/js/main.60c36ada.chunk.js.map",
-    "runtime-main.js": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js",
-    "runtime-main.js.map": "/web-sploosh-kaboom/static/js/runtime-main.f6a4d017.js.map",
-    "static/js/2.facb2e37.chunk.js": "/web-sploosh-kaboom/static/js/2.facb2e37.chunk.js",
-    "static/js/2.facb2e37.chunk.js.map": "/web-sploosh-kaboom/static/js/2.facb2e37.chunk.js.map",
+    "main.css": "/web-sploosh-kaboom/static/css/main.2538c543.chunk.css",
+    "main.js": "/web-sploosh-kaboom/static/js/main.69b64848.chunk.js",
+    "main.js.map": "/web-sploosh-kaboom/static/js/main.69b64848.chunk.js.map",
+    "runtime-main.js": "/web-sploosh-kaboom/static/js/runtime-main.8db49b55.js",
+    "runtime-main.js.map": "/web-sploosh-kaboom/static/js/runtime-main.8db49b55.js.map",
+    "static/js/2.38720f0c.chunk.js": "/web-sploosh-kaboom/static/js/2.38720f0c.chunk.js",
+    "static/js/2.38720f0c.chunk.js.map": "/web-sploosh-kaboom/static/js/2.38720f0c.chunk.js.map",
     "index.html": "/web-sploosh-kaboom/index.html",
-    "precache-manifest.9a79fbea0f24427e00b2757e5825027e.js": "/web-sploosh-kaboom/precache-manifest.9a79fbea0f24427e00b2757e5825027e.js",
+    "precache-manifest.62626d6b05ca4f01072d23b6139ec0c1.js": "/web-sploosh-kaboom/precache-manifest.62626d6b05ca4f01072d23b6139ec0c1.js",
     "service-worker.js": "/web-sploosh-kaboom/service-worker.js",
-    "static/css/main.7fb2b023.chunk.css.map": "/web-sploosh-kaboom/static/css/main.7fb2b023.chunk.css.map",
-    "static/js/2.facb2e37.chunk.js.LICENSE.txt": "/web-sploosh-kaboom/static/js/2.facb2e37.chunk.js.LICENSE.txt"
+    "static/css/main.2538c543.chunk.css.map": "/web-sploosh-kaboom/static/css/main.2538c543.chunk.css.map",
+    "static/js/2.38720f0c.chunk.js.LICENSE.txt": "/web-sploosh-kaboom/static/js/2.38720f0c.chunk.js.LICENSE.txt",
+    "static/media/App.css": "/web-sploosh-kaboom/static/media/board_background.6fc68136.png"
   },
   "entrypoints": [
-    "static/js/runtime-main.f6a4d017.js",
-    "static/js/2.facb2e37.chunk.js",
-    "static/css/main.7fb2b023.chunk.css",
-    "static/js/main.60c36ada.chunk.js"
+    "static/js/runtime-main.8db49b55.js",
+    "static/js/2.38720f0c.chunk.js",
+    "static/css/main.2538c543.chunk.css",
+    "static/js/main.69b64848.chunk.js"
   ]
 }
