@@ -1,7 +1,4 @@
 # Live version: https://peter.website/web-sploosh-kaboom/
-### Alternate version: https://amphitryon0.github.io/web-sploosh-kaboom/
-The alternate version contains a few new features, but it has known issues that
-prevent these features from being merged here for the time being.
 
 # Sploosh Kaboom FAQ
 
